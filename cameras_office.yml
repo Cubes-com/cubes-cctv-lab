@@ -1,0 +1,14 @@
+mediamtx:
+  rtsp_port: 8554
+  host: "127.0.0.1"
+
+defaults:
+  fps: 10
+  width: 640
+  height: 360
+  rtsp_transport: "tcp"
+  timeout_sec: 5
+
+cameras:
+  - name: "2ndflooroffice"
+    url: "rtsp://127.0.0.1:8554/maccam"

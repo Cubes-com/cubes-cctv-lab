@@ -1,0 +1,14 @@
+opencv-python
+pyyaml
+psycopg2-binary
+flask
+fastapi
+uvicorn
+pydantic
+numpy
+onnxruntime
+supervision
+insightface
+mediapipe
+requests
+mcp

@@ -1,0 +1,14 @@
+mediamtx:
+  rtsp_port: 8554
+  host: "127.0.0.1"
+
+defaults:
+  fps: 5
+  width: 640
+  height: 360
+  rtsp_transport: "tcp"
+  timeout_sec: 5
+
+cameras:
+  - name: "amlobby3"
+    url: "rtsp://root:L1veW1re@192.168.13.30:554/axis-media/media.amp?streamprofile=profile_3_h264"

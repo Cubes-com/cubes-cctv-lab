@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project Data
+data/
+logs/
+*.log
+identities.db
+
+# Models (downloaded on demand)
+yolov8n.onnx
+gesture_recognizer.task
+
+# IDE
+.idea/
+.vscode/

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Person Details: {{ name }}{% endblock %}
+
+{% block content %}
+<div class="header-actions" style="margin-bottom: 20px;">
+    <a href="/" class="btn">Back to Dashboard</a>
+    <a href="/training" class="btn">Training</a>
+</div>
+
+<h2>Person: {{ name }}</h2>
+
+<h3>Recent Sightings (Logs)</h3>
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+    <p style="margin: 0;">These are automatically logged sightings. You can re-assign them if they are incorrect.</p>
+    {% if unconfirmed_count > 0 %}
+    <form action="/person/{{ name }}/confirm_all" method="post" style="margin: 0;">
+        <button type="submit" style="background-color: var(--success); color: #000; padding: 8px 16px;">
+            Confirm All ({{ unconfirmed_count }})
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+<div class="grid">
+    {% for sighting in sightings %}
+    <div class="card">
+        <div style="position: relative;">
+            <img src="/image/{{ sighting.id }}" alt="Sighting {{ sighting.id }}"
+                style="width: 100%; border-radius: 4px;">
+            {% if sighting.is_permanent %}
+            <div
+                style="position: absolute; top: 5px; right: 5px; background: green; color: white; padding: 2px 5px; border-radius: 4px; font-size: 0.8em; z-index: 10;">
+                Confirmed
+            </div>
+            {% endif %}
+
+            {% if sighting.bbox %}
+            <!-- Draw Bounding Box (Green for Confirmed, Red for Unconfirmed) -->
+            <div style="
+                position: absolute;
+                left: {{ sighting.bbox[0] * 100 }}%;
+                top: {{ sighting.bbox[1] * 100 }}%;
+                width: {{ (sighting.bbox[2] - sighting.bbox[0]) * 100 }}%;
+                height: {{ (sighting.bbox[3] - sighting.bbox[1]) * 100 }}%;
+                border: 2px solid {% if sighting.is_permanent %}#00ff00{% else %}#ff0000{% endif %};
+                pointer-events: none;
+                z-index: 5;
+            "></div>
+            {% endif %}
+        </div>
+        <p class="time">{{ sighting.timestamp }}</p>
+
+        <div class="actions">
+            <!-- Re-Assign Existing -->
+            <form action="/assign" method="post">
+                <input type="hidden" name="sighting_id" value="{{ sighting.id }}">
+                <input type="hidden" name="next_url" value="/person/{{ name }}">
+
+                <select name="name" style="width: 100%; margin-bottom: 5px;">
+                    <option value="" disabled selected>Re-assign to...</option>
+                    {% for id_name in identities %}
+                    <option value="{{ id_name }}">{{ id_name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" style="width: 100%;">Re-Assign</button>
+            </form>
+
+            <!-- Delete -->
+            <form action="/delete_sighting" method="post" style="margin-bottom: 5px;"
+                onsubmit="return confirm('Are you sure you want to delete this sighting?');">
+                <input type="hidden" name="sighting_id" value="{{ sighting.id }}">
+                <input type="hidden" name="next_url" value="/person/{{ name }}">
+                <button type="submit" style="width: 100%; background-color: #cf6679; color: white;">Delete</button>
+            </form>
+
+            <!-- Create New (if needed) -->
+            <details>
+                <summary>Create New Person</summary>
+                <form action="/create" method="post" style="margin-top: 10px;">
+                    <input type="hidden" name="sighting_id" value="{{ sighting.id }}">
+                    <input type="hidden" name="next_url" value="/person/{{ name }}">
+                    <input type="text" name="name" placeholder="New Name" required
+                        style="width: 100%; margin-bottom: 5px;">
+                    <button type="submit" style="width: 100%;">Create & Assign</button>
+                </form>
+            </details>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

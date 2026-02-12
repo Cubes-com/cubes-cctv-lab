@@ -1,0 +1,109 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: cctv-postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: cctv
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user -d cctv" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mediamtx:
+    image: bluenviron/mediamtx:latest
+    container_name: cctv-mediamtx
+    ports:
+      - "8554:8554"
+      - "1935:1935"
+      - "8888:8888"
+      - "8889:8889"
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+    environment:
+      MTX_PATH_CONF: /mediamtx.yml
+
+  ingest:
+    build: .
+    container_name: cctv-ingest
+    depends_on:
+      - mediamtx
+    command: [ "python3", "-u", "src/run_ingest.py", "cameras.yml" ]
+    volumes:
+      - ./cameras.yml:/app/cameras.yml:ro
+      - ./src:/app/src
+    environment:
+      - MEDIAMTX_HOST=mediamtx
+      - PYTHONUNBUFFERED=1
+
+  analysis:
+    build: .
+    container_name: cctv-analysis
+    depends_on:
+      mediamtx:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    command: [ "python3", "-u", "src/run_analysis.py", "cameras.yml" ]
+    volumes:
+      - ./cameras.yml:/app/cameras.yml:ro
+      - ./data:/app/data
+      - ./src:/app/src
+    environment:
+      - MEDIAMTX_HOST=mediamtx
+      - DB_HOST=postgres
+      - DB_NAME=cctv
+      - DB_USER=user
+      - DB_PASS=password
+      - FACE_MATCH_THRESHOLD=0.85
+      - PYTHONUNBUFFERED=1
+
+  api:
+    build: .
+    container_name: cctv-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: [ "uvicorn", "src.api:app", "--host", "0.0.0.0", "--port", "8000" ]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+      - ./cameras.yml:/app/cameras.yml:ro
+      - ./mcp.json:/app/mcp.json:ro
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=cctv
+      - DB_USER=user
+      - DB_PASS=password
+      - MCP_HOST=*
+
+  web:
+    build: .
+    container_name: cctv-web
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    command: [ "python3", "-u", "src/web_app.py" ]
+    ports:
+      - "80:5001"
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=cctv
+      - DB_USER=user
+      - DB_PASS=password
+      - FLASK_RUN_HOST=0.0.0.0
+      - API_HOST=http://api:8000
+
+volumes:
+  postgres-data:

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}CCTV Training{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom: 20px; max-width: 400px;">
+    <h2>Add or Update Person</h2>
+    <form action="/upload" method="post" enctype="multipart/form-data">
+        <input type="text" name="name" placeholder="Name (New or Existing)" list="existing_names" required
+            style="width: 100%; margin-bottom: 10px; box-sizing: border-box;">
+        <datalist id="existing_names">
+            {% for name in identities %}
+            <option value="{{ name }}">
+                {% endfor %}
+        </datalist>
+        <input type="file" name="image" required accept="image/*" style="width: 100%; margin-bottom: 10px;">
+        <button type="submit" style="width: 100%;">Upload & Create/Update Identity</button>
+    </form>
+</div>
+
+<h2>Unknown Sightings</h2>
+<div class="grid">
+    {% for sighting in sightings %}
+    <div class="card">
+        <div style="position: relative;">
+            <img src="/image/{{ sighting.id }}" alt="Sighting {{ sighting.id }}"
+                style="width: 100%; border-radius: 4px;">
+
+            {% if sighting.bbox %}
+            <!-- Draw Bounding Box (Red for Unconfirmed) -->
+            <div style="
+                position: absolute;
+                left: {{ sighting.bbox[0] * 100 }}%;
+                top: {{ sighting.bbox[1] * 100 }}%;
+                width: {{ (sighting.bbox[2] - sighting.bbox[0]) * 100 }}%;
+                height: {{ (sighting.bbox[3] - sighting.bbox[1]) * 100 }}%;
+                border: 2px solid #ff0000;
+                pointer-events: none;
+            "></div>
+            {% endif %}
+        </div>
+        <p class="time">{{ sighting.timestamp }}</p>
+
+        <div class="actions">
+            <!-- Create New -->
+            <form action="/create" method="post" style="margin-bottom: 10px;">
+                <input type="hidden" name="sighting_id" value="{{ sighting.id }}">
+                <input type="text" name="name" placeholder="New Name" required style="width: 100%; margin-bottom: 5px;">
+                <button type="submit" style="width: 100%;">Create</button>
+            </form>
+
+            <!-- Assign Existing -->
+            <form action="/assign" method="post">
+                <input type="hidden" name="sighting_id" value="{{ sighting.id }}">
+                <select name="name" style="width: 100%; margin-bottom: 5px;">
+                    <option value="" disabled selected>Assign to...</option>
+                    {% for name in identities %}
+                    <option value="{{ name }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" style="width: 100%;">Assign</button>
+            </form>
+
+            <!-- Delete -->
+            <form action="/delete_sighting" method="post"
+                onsubmit="return confirm('Are you sure you want to delete this sighting?');">
+                <input type="hidden" name="sighting_id" value="{{ sighting.id }}">
+                <input type="hidden" name="next_url" value="/training">
+                <button type="submit" style="width: 100%; background-color: #cf6679; color: white;">Delete</button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

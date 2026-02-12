@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block header_right %}
+<div class="status"><span class="live-indicator"></span>Updating live</div>
+{% endblock %}
+
+{% block content %}
+<div id="grid" class="grid">
+    <div class="loading">Loading locations...</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function timeAgo(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.floor((now - date) / 1000);
+
+        if (seconds < 60) return "Just now";
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes} min${minutes > 1 ? 's' : ''} ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours} hr${hours > 1 ? 's' : ''} ago`;
+        return date.toLocaleDateString();
+    }
+
+    function getStatusDot(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+
+        let color = 'red'; // Default > 2 hours
+        if (diffMins < 15) {
+            color = '#00ff00'; // Green < 15 mins (using hex for brightness)
+        } else if (diffMins < 120) {
+            color = 'orange'; // Orange < 2 hours
+        }
+
+        return `<span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${color}; margin-right: 6px;"></span>`;
+    }
+
+    function createCard(person) {
+        let badgeHtml = '';
+        if (person.unconfirmed_count > 0) {
+            badgeHtml = `<span class="badge" title="${person.unconfirmed_count} unconfirmed sightings" style="vertical-align: middle;">${person.unconfirmed_count}</span>`;
+        }
+
+        return `
+            <div class="card">
+                <div class="person-name">
+                    <a href="/person/${person.name}" style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 8px;">
+                        ${person.name} ${badgeHtml}
+                    </a>
+                </div>
+                <div class="location-info">
+                    <div class="camera">
+                        📷 ${person.description}
+                    </div>
+                    <div class="time" style="display: flex; align-items: center;">
+                        ${getStatusDot(person.timestamp)}
+                        ${timeAgo(person.timestamp)}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    async function fetchLocations() {
+        try {
+            // Sort by name alphabetically
+            const response = await fetch('/locations/recent?sort=name');
+            const data = await response.json();
+
+            const grid = document.getElementById('grid');
+
+            if (data.length === 0) {
+                grid.innerHTML = '<div class="loading">No sightings in the last 12 hours.</div>';
+                return;
+            }
+
+            grid.innerHTML = data.map(person => createCard(person)).join('');
+        } catch (error) {
+            console.error('Error fetching locations:', error);
+        }
+    }
+
+    // Initial fetch
+    fetchLocations();
+
+    // Poll every 10 seconds
+    setInterval(fetchLocations, 10000);
+</script>
+{% endblock %}
