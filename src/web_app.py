@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import insightface
-from flask import Flask, render_template, request, redirect, send_file, jsonify
+from flask import Flask, render_template, request, redirect, send_file, jsonify, url_for
 import os
 import requests
 from identity_db import IdentityDB
@@ -168,16 +168,31 @@ def confirm_all(name):
     db.close()
     return redirect(f"/person/{name}")
 
-@app.route("/delete_sighting", methods=["POST"])
-def delete_sighting():
-    sighting_id = int(request.form.get("sighting_id"))
-    next_url = request.form.get("next_url", "/")
-    
+@app.route("/delete_person", methods=["POST"])
+def delete_person():
+    name = request.form.get("name")
+    if not name:
+        return "Missing name", 400
+        
     db = get_db()
-    db.delete_sighting(sighting_id)
+    
+    # 1. Delete from DB and get file list
+    files_to_delete = db.delete_identity(name)
     db.close()
     
-    return redirect(next_url)
+    # 2. Delete files from disk
+    count = 0
+    for file_path in files_to_delete:
+        if file_path and os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                count += 1
+            except OSError as e:
+                print(f"Error deleting file {file_path}: {e}")
+                
+    print(f"Deleted person {name} and {count} sighting files.")
+    
+    return redirect(url_for('dashboard'))
 
 
 @app.route("/upload", methods=["POST"])
@@ -188,17 +203,26 @@ def upload_identity():
     if not name or not file:
         return "Missing name or file", 400
         
+    db = get_db()
+    if db.get_identity_id_by_name(name):
+        db.close()
+        return f"Error: Name '{name}' already exists. Please use a unique name.", 400
+    
     # Read image
     in_memory_file = file.read()
     nparr = np.frombuffer(in_memory_file, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
     if img is None:
+        db.close() # Should confirm db is closed if we return early? 
+                   # Actually I opened db above. I should close it or move db open later.
+                   # Let's close it before return.
         return "Invalid image", 400
         
     # Detect Face
     faces = face_app.get(img)
     if not faces:
+        db.close()
         return "No face detected in photo", 400
         
     # Pick the largest face (or first)
@@ -211,18 +235,9 @@ def upload_identity():
     filepath = os.path.join(IDENTITIES_DIR, filename)
     cv2.imwrite(filepath, img)
     
-    # Save Identity to DB
-    db = get_db()
-    identity_id = db.get_identity_id_by_name(name)
-    
-    if identity_id:
-        print(f"Adding new training image for existing identity: {name}")
-        # Add as a sighting linked to this identity
-        # NOTE: We use the same filepath in data/identities
-        db.add_sighting_for_identity(identity_id, filepath, face.embedding)
-    else:
-        print(f"Creating new identity: {name}")
-        db.save_identity(name, face.embedding)
+    # Save Identity to DB (We already checked name existence, but technically race condition possible. Ignoring for now.)
+    print(f"Creating new identity: {name}")
+    db.save_identity(name, face.embedding)
         
     db.close()
     

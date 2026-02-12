@@ -124,32 +124,37 @@ class IdentityDB:
         print(f"Saved identity: {name}")
 
     def delete_identity(self, name):
+        """
+        Deletes a person, their sightings (DB + files), and location history.
+        Returns list of file paths that were deleted.
+        """
+        deleted_files = []
         with self.conn.cursor() as cursor:
             # Get ID first
             cursor.execute("SELECT id FROM identities WHERE name = %s", (name,))
             res = cursor.fetchone()
-            if not res: return False
+            if not res: return []
             identity_id = res[0]
             
-            # Delete sightings (set to NULL) or Delete?
-            # If we delete identity, sightings should probably become Unknown (NULL)
-            # But "is_permanent" implies they were confirmed.
-            # Let's just set identity_id to NULL and is_permanent to FALSE?
-            # Or assume deletion means "This person doesn't exist, these sightings are trash"?
-            # User requirement: "When an image is deleted from user A..." (that's specific sighting deletion)
-            # This is "Delete entire Identity". Usually implies wiping knowledge of them.
+            # 1. Get all sighting file paths to delete
+            cursor.execute("SELECT image_path FROM sightings WHERE identity_id = %s", (identity_id,))
+            rows = cursor.fetchall()
+            for row in rows:
+                if row[0]:
+                    deleted_files.append(row[0])
             
-            cursor.execute("UPDATE sightings SET identity_id = NULL, is_permanent = FALSE WHERE identity_id = %s", (identity_id,))
+            # 2. Delete sightings from DB
+            cursor.execute("DELETE FROM sightings WHERE identity_id = %s", (identity_id,))
+            
+            # 3. Delete identity
             cursor.execute("DELETE FROM identities WHERE id = %s", (identity_id,))
-            rows_deleted = cursor.rowcount
             
-            # Also clean location
+            # 4. Clean location data
             cursor.execute("DELETE FROM person_location WHERE name = %s", (name,))
-            # Log? Keep log for history? Or delete?
-            # Keep log.
+            cursor.execute("DELETE FROM person_location_log WHERE name = %s", (name,))
             
         self.conn.commit()
-        return rows_deleted > 0
+        return deleted_files
 
     def get_known_faces(self):
         with self.conn.cursor() as cursor:
