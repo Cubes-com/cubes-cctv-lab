@@ -263,13 +263,22 @@ class IdentityDB:
             
     def get_sightings_for_identity(self, identity_id, limit=50):
         with self.conn.cursor() as cursor:
+            # Union query:
+            # 1. All UNCONFIRMED sightings for this identity (no limit)
+            # 2. Recent sightings (confirmed or not) limited by 'limit'
+            # This ensures we always see "action items" (unconfirmed) even if they are old.
             cursor.execute("""
-                SELECT id, image_path, timestamp, is_permanent, camera, bbox 
-                FROM sightings 
-                WHERE identity_id = %s 
-                ORDER BY timestamp DESC 
-                LIMIT %s
-            """, (identity_id, limit))
+                (SELECT id, image_path, timestamp, is_permanent, camera, bbox 
+                 FROM sightings 
+                 WHERE identity_id = %s AND is_permanent = FALSE)
+                UNION
+                (SELECT id, image_path, timestamp, is_permanent, camera, bbox 
+                 FROM sightings 
+                 WHERE identity_id = %s 
+                 ORDER BY timestamp DESC 
+                 LIMIT %s)
+                ORDER BY timestamp DESC
+            """, (identity_id, identity_id, limit))
             return cursor.fetchall()
     
     def get_identity_id_by_name(self, name):

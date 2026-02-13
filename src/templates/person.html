@@ -182,7 +182,8 @@
         const name = select.value;
         if (!name) return;
 
-        if (!confirm(`Re-assign this sighting to ${name}?`)) return;
+        // Removed confirm popup as requested
+        // if (!confirm(`Re-assign this sighting to ${name}?`)) return;
 
         try {
             const formData = new FormData();
