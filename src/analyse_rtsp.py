@@ -72,6 +72,9 @@ def preprocess(frame, input_shape):
 # I cannot do two disjoint edits in one replace_file_content unless I use multi_replace.
 # I will use multi_replace_file_content.
 
+def sigmoid(x):
+    return 1.0 / (1.0 + np.exp(-x))
+
 def postprocess(output, input_shape, original_shape):
     predictions = np.squeeze(output).T  # (8400, 84)
 
@@ -82,14 +85,14 @@ def postprocess(output, input_shape, original_shape):
     boxes = predictions[:, :4]
 
     if C == 84:
-        cls = predictions[:, 4:]
-        class_ids = np.argmax(cls, axis=1)
-        scores = cls[np.arange(cls.shape[0]), class_ids]
+        cls = sigmoid(predictions[:, 4:])  # (N, 80)
+        class_ids = np.argmax(cls, axis=1)  # (N,)
+        scores = np.take_along_axis(cls, class_ids[:, None], axis=1).squeeze(1)  # (N,)
     elif C == 85:
-        obj = predictions[:, 4]
-        cls = predictions[:, 5:]
-        class_ids = np.argmax(cls, axis=1)
-        class_scores = cls[np.arange(cls.shape[0]), class_ids]
+        obj = sigmoid(predictions[:, 4])    # (N,)
+        cls = sigmoid(predictions[:, 5:])   # (N, 80)
+        class_ids = np.argmax(cls, axis=1)  # (N,)
+        class_scores = np.take_along_axis(cls, class_ids[:, None], axis=1).squeeze(1)  # (N,)
         scores = obj * class_scores
     else:
         raise ValueError("Unexpected YOLO output channels: %s" % (C,))
