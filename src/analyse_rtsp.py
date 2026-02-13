@@ -145,6 +145,15 @@ def main():
         print(f"Failed to load YOLO model: {e}")
         return
 
+    print("ORT providers:", ort.get_available_providers())
+    print("Model inputs:")
+    for i in session.get_inputs():
+        print("  -", i.name, i.shape, i.type)
+
+    print("Model outputs:")
+    for o in session.get_outputs():
+        print("  -", o.name, o.shape, o.type)
+
     input_name = session.get_inputs()[0].name
     output_name = session.get_outputs()[0].name
     input_shape = (640, 640) 
@@ -216,6 +225,8 @@ def main():
             if not ret:
                 print("No frame yet. Waiting...")
                 stats.add_skipped()
+                time.sleep(0.01)
+                continue                
             # Ignore duplicate frames (consumer faster than producer)
             if frame_id == last_frame_id:
                 time.sleep(0.01)
@@ -234,6 +245,11 @@ def main():
             stats.add_processed()
             frame_count += 1
             
+            if time.time() - last_stats_update > 5:
+                out0 = outputs[0]
+                print("YOLO output shape:", out0.shape, "dtype:", out0.dtype,
+                    "min:", float(np.min(out0)), "max:", float(np.max(out0)))
+
             # --- Periodic Stats Update (Every 30s) ---
             if time.time() - last_stats_update > 30:
                 p, s, d = stats.get_stats()
