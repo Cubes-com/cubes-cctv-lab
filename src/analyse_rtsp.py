@@ -76,23 +76,31 @@ def postprocess(output, input_shape, original_shape):
     # output shape is (1, 84, 8400)
     predictions = np.squeeze(output).T  # (8400, 84)
 
-    SCORE_THRESH = 0.05  # start here
-    NMS_THRESH = 0.5    # start here
+    SCORE_THRESH = 0.05
+    NMS_THRESH = 0.5
 
-    # DEBUG one-time
-    # print("boxes min/max:", float(np.min(predictions[:, :4])), float(np.max(predictions[:, :4])))
-    # print("class min/max:", float(np.min(predictions[:, 4:])), float(np.max(predictions[:, 4:])))
+    # predictions shape: (N, C) where C is 84 (4+80) or 85 (4+1+80)
+    C = predictions.shape[1]
 
-    obj = predictions[:, 4]
-    cls = predictions[:, 5:]  # 80 classes
+    boxes = predictions[:, :4]
 
-    class_ids = np.argmax(cls, axis=1)
-    class_scores = cls[np.arange(cls.shape[0]), class_ids]
-
-    scores = obj * class_scores
+    if C == 84:
+        # YOLOv8 ONNX export variant where class scores are already "final" (no explicit obj)
+        cls = predictions[:, 4:]  # (N,80)
+        class_ids = np.argmax(cls, axis=1)
+        scores = cls[np.arange(cls.shape[0]), class_ids]
+    elif C == 85:
+        # Variant with explicit objectness at index 4
+        obj = predictions[:, 4]
+        cls = predictions[:, 5:]  # (N,80)
+        class_ids = np.argmax(cls, axis=1)
+        class_scores = cls[np.arange(cls.shape[0]), class_ids]
+        scores = obj * class_scores
+    else:
+        raise ValueError("Unexpected YOLO output channels: %s" % (C,))
 
     keep = scores > SCORE_THRESH
-    predictions = predictions[keep, :]
+    boxes = boxes[keep, :]
     scores = scores[keep]
     class_ids = class_ids[keep]
 
