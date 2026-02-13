@@ -144,10 +144,17 @@ def _execute_sighting_query(query_type: str, **kwargs):
     first_ts = None
     last_ts = None
     
-    for s_id, path, ts, cam, p_name, bbox in rows:
+    for s_id, path, ts, cam, p_name, bbox, end_ts in rows:
         desc = map_camera_description(cam)
+        
+        duration = None
+        if end_ts and end_ts > ts:
+            duration = (end_ts - ts).total_seconds()
+
         sightings.append({
             "ts": ts,
+            "end_ts": end_ts,
+            "duration": duration,
             "person": p_name,
             "camera_id": cam,
             "location_name": desc,

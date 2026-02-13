@@ -61,6 +61,8 @@ class Sighting(BaseModel):
     camera: Optional[str] = None
     description: Optional[str] = None
     timestamp: str
+    end_timestamp: Optional[str] = None
+    duration: Optional[float] = None
     image_path: Optional[str] = None
     unconfirmed_count: int = 0
 
@@ -152,12 +154,18 @@ def handle_query(name=None, camera=None, date_str=None, order="DESC", limit=None
     rows = db.query_sightings(name=name, camera=camera, date_str=date_str, order=order, limit=limit)
     
     results = []
-    for s_id, path, ts, cam, p_name, bbox in rows:
+    for s_id, path, ts, cam, p_name, bbox, end_ts in rows:
+        duration = None
+        if end_ts and end_ts > ts:
+            duration = (end_ts - ts).total_seconds()
+            
         results.append({
             "name": p_name if p_name else "Unknown",
             "camera": cam,
             "description": map_camera_description(cam),
             "timestamp": str(ts),
+            "end_timestamp": str(end_ts) if end_ts else None,
+            "duration": duration,
             "image_path": path
         })
     return results

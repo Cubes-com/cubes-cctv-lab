@@ -351,6 +351,8 @@ def main():
                         "last_gesture_check": 0,
                         "current_gesture": None,
                         "last_face_seen": 0,
+                        "current_sighting_id": None,
+                        "last_sighting_update": 0,
                     }
                 
                 info = track_info[track_id]
@@ -432,8 +434,10 @@ def main():
                                         # Save CLEAN image (no drawing)
                                         cv2.imwrite(filepath, person_crop)
                                         
-                                        db.add_sighting(filepath, face.embedding, identity_id=identity_id, is_permanent=False, camera=camera_name, bbox=norm_bbox)
-                                        print(f"LOG: Saved known sighting to {filepath} with bbox {norm_bbox}")
+                                        sighting_id = db.add_sighting(filepath, face.embedding, identity_id=identity_id, is_permanent=False, camera=camera_name, bbox=norm_bbox)
+                                        info["current_sighting_id"] = sighting_id
+                                        info["last_sighting_update"] = now
+                                        print(f"LOG: Saved known sighting to {filepath} with bbox {norm_bbox} (ID: {sighting_id})")
 
                                 else:
                                     # Still Unknown - Save Sighting (Throttled)
@@ -458,8 +462,10 @@ def main():
                                         # Save CLEAN image
                                         cv2.imwrite(filepath, person_crop)
                                         
-                                        db.add_sighting(filepath, face.embedding, is_permanent=False, camera=camera_name, bbox=norm_bbox)
-                                        print(f"SIGHTING: Saved unknown sighting to {filepath} with bbox {norm_bbox}")
+                                        sighting_id = db.add_sighting(filepath, face.embedding, is_permanent=False, camera=camera_name, bbox=norm_bbox)
+                                        info["current_sighting_id"] = sighting_id
+                                        info["last_sighting_update"] = now
+                                        print(f"SIGHTING: Saved unknown sighting to {filepath} with bbox {norm_bbox} (ID: {sighting_id})")
                                         
                                         info["last_sighting_saved"] = now
 
@@ -485,6 +491,17 @@ def main():
                             # print(f"HEARTBEAT: Updated location for {info['name']}") 
                         except Exception as e:
                             print(f"Heartbeat error: {e}")
+                            
+                    # Sighting Duration Update (Every 5s)
+                    last_sighting_update = info.get("last_sighting_update", 0)
+                    current_sighting_id = info.get("current_sighting_id")
+                    
+                    if current_sighting_id and (now - last_sighting_update > 5.0):
+                        try:
+                            db.update_sighting_end_time(current_sighting_id)
+                            info["last_sighting_update"] = now
+                        except Exception as e:
+                            print(f"Sighting heartbeat error: {e}")
                             
                     # Periodic Re-Verification (e.g. every 60s) to ensure they didn't swap?
                     # ByteTrack is pretty good, but let's be safe.

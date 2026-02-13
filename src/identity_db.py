@@ -72,6 +72,13 @@ class IdentityDB:
                     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sightings' AND column_name='bbox') THEN
                         ALTER TABLE sightings ADD COLUMN bbox JSONB;
                     END IF;
+
+                    -- Migration: Add end_timestamp if it doesn't exist
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='sightings' AND column_name='end_timestamp') THEN
+                        ALTER TABLE sightings ADD COLUMN end_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                        -- Backfill existing rows
+                        UPDATE sightings SET end_timestamp = timestamp WHERE end_timestamp IS NULL;
+                    END IF;
                 END $$;
             """)
             
@@ -245,11 +252,20 @@ class IdentityDB:
         import json
         bbox_json = json.dumps(bbox) if bbox else None
 
+        sighting_id = None
         with self.conn.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO sightings (image_path, embedding, identity_id, is_permanent, camera, bbox) VALUES (%s, %s, %s, %s, %s, %s)", 
+                "INSERT INTO sightings (image_path, embedding, identity_id, is_permanent, camera, bbox, end_timestamp) VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP) RETURNING id", 
                 (image_path, embedding_bytes, identity_id, is_permanent, camera, bbox_json)
             )
+            sighting_id = cursor.fetchone()[0]
+        self.conn.commit()
+        return sighting_id
+
+    def update_sighting_end_time(self, sighting_id):
+        """Updates the end_timestamp of a sighting to now."""
+        with self.conn.cursor() as cursor:
+            cursor.execute("UPDATE sightings SET end_timestamp = CURRENT_TIMESTAMP WHERE id = %s", (sighting_id,))
         self.conn.commit()
 
     def add_sighting_for_identity(self, identity_id, image_path, embedding, camera=None, bbox=None):
@@ -310,7 +326,7 @@ class IdentityDB:
         min_timestamp, max_timestamp: datetime objects for granular filtering
         """
         query = """
-            SELECT s.id, s.image_path, s.timestamp, s.camera, i.name, s.bbox
+            SELECT s.id, s.image_path, s.timestamp, s.camera, i.name, s.bbox, s.end_timestamp
             FROM sightings s
             LEFT JOIN identities i ON s.identity_id = i.id
             WHERE 1=1
