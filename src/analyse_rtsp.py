@@ -76,16 +76,22 @@ def postprocess(output, input_shape, original_shape):
     # output shape is (1, 84, 8400)
     predictions = np.squeeze(output).T  # (8400, 84)
 
+    SCORE_THRESH = 0.2  # start here
+    NMS_THRESH = 0.5    # start here
+
     # DEBUG one-time
     print("boxes min/max:", float(np.min(predictions[:, :4])), float(np.max(predictions[:, :4])))
     print("class min/max:", float(np.min(predictions[:, 4:])), float(np.max(predictions[:, 4:])))
 
     scores = np.max(predictions[:, 4:], axis=1)
-    predictions = predictions[scores > 0.5, :]
-    scores = scores[scores > 0.5]
+    keep = scores > SCORE_THRESH
+    predictions = predictions[keep, :]
+    scores = scores[keep]
 
     if len(scores) == 0:
         return sv.Detections.empty()
+
+    print("max score:", float(scores.max()), "kept:", int((scores > SCORE_THRESH).sum()))
 
     class_ids = np.argmax(predictions[:, 4:], axis=1)
     boxes = predictions[:, :4]
@@ -116,7 +122,7 @@ def postprocess(output, input_shape, original_shape):
         boxes_xyxy.append([x1, y1, x2, y2])
         boxes_xywh.append([x1, y1, int(w), int(h)])
         
-    indices = cv2.dnn.NMSBoxes(boxes_xywh, scores.tolist(), 0.5, 0.4)
+    indices = cv2.dnn.NMSBoxes(boxes_xywh, scores.tolist(), SCORE_THRESH, NMS_THRESH)
     if len(indices) == 0:
         return sv.Detections.empty()
     
