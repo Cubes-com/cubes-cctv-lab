@@ -84,16 +84,24 @@ def postprocess(output, input_shape, original_shape):
     C = predictions.shape[1]
     boxes = predictions[:, :4]
 
+    PERSON_ID = 0
+
     if C == 84:
-        cls = sigmoid(predictions[:, 4:])  # (N, 80)
-        class_ids = np.argmax(cls, axis=1)  # (N,)
-        scores = np.take_along_axis(cls, class_ids[:, None], axis=1).squeeze(1)  # (N,)
+        cls = sigmoid(predictions[:, 4:])  # (N,80)
+        person_scores = cls[:, PERSON_ID]  # (N,)
+        keep = person_scores > SCORE_THRESH
+        boxes = boxes[keep, :]
+        scores = person_scores[keep]
+        class_ids = np.full(scores.shape, PERSON_ID, dtype=np.int64)
+
     elif C == 85:
         obj = sigmoid(predictions[:, 4])    # (N,)
-        cls = sigmoid(predictions[:, 5:])   # (N, 80)
-        class_ids = np.argmax(cls, axis=1)  # (N,)
-        class_scores = np.take_along_axis(cls, class_ids[:, None], axis=1).squeeze(1)  # (N,)
-        scores = obj * class_scores
+        cls = sigmoid(predictions[:, 5:])   # (N,80)
+        person_scores = obj * cls[:, PERSON_ID]
+        keep = person_scores > SCORE_THRESH
+        boxes = boxes[keep, :]
+        scores = person_scores[keep]
+        class_ids = np.full(scores.shape, PERSON_ID, dtype=np.int64)
     else:
         raise ValueError("Unexpected YOLO output channels: %s" % (C,))
 
@@ -310,7 +318,8 @@ def main():
                         "name": "Unknown", 
                         "last_face_check": 0,
                         "last_gesture_check": 0,
-                        "current_gesture": None
+                        "current_gesture": None,
+                        "last_face_seen": 0,
                     }
                 
                 info = track_info[track_id]
@@ -343,11 +352,19 @@ def main():
                             faces = face_app.get(person_crop)
                             if len(faces) > 0:
                                 face = faces[0] 
-                                
+
+                                fx1, fy1, fx2, fy2 = map(int, face.bbox)
+                                face_w = fx2 - fx1
+                                face_h = fy2 - fy1
+                                if face_w < 40 or face_h < 40:
+                                    continue
+
                                 # Extra strict check just in case
-                                if face.det_score < 0.65:
+                                if face.det_score < 0.75:
                                     continue
                                     
+                                info["last_face_seen"] = now
+                                
                                 matched_name = db.get_best_match(face.embedding)
                                 
                                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
