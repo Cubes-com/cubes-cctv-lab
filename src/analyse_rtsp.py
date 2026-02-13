@@ -140,7 +140,7 @@ def main():
     # 1. Load YOLO
     print(f"Loading YOLO model from {model_path}...")
     try:
-        session = ort.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+        session = ort.InferenceSession(model_path, providers=['CUDAExecutionProvider', "CPUExecutionProvider"])
     except Exception as e:
         print(f"Failed to load YOLO model: {e}")
         return
@@ -153,7 +153,7 @@ def main():
     print("Initializing Face Analysis (w/ partial SCRFD)...")
     # buffalo_s uses DET_500M (SCRFD/RetinaFace)
     # Increasing det_thresh to 0.65 to avoid back-of-head detections
-    face_app = insightface.app.FaceAnalysis(name='buffalo_s', providers=['CPUExecutionProvider'])
+    face_app = insightface.app.FaceAnalysis(name='buffalo_s', providers=['CUDAExecutionProvider', 'CPUExecutionProvider'])
     face_app.prepare(ctx_id=0, det_size=(640, 640), det_thresh=0.65)
     
     # 3. Init Gesture Recognizer (MediaPipe) - DISABLED

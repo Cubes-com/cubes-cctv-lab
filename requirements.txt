@@ -6,7 +6,7 @@ fastapi
 uvicorn
 pydantic
 numpy
-onnxruntime
+onnxruntime-gpu
 supervision
 insightface
 mediapipe
