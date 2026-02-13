@@ -101,10 +101,10 @@ def postprocess(output, input_shape, original_shape):
     else:
         raise ValueError("Unexpected YOLO output channels: %s" % (C,))
 
-    if np.random.rand() < 0.005:
-        print("DBG [%s] C=%d person min/max: %0.4f/%0.4f" % (
-            time.time(), C, float(person_scores.min()), float(person_scores.max())
-        ))
+    # if np.random.rand() < 0.005:
+    #     print("DBG [%s] C=%d person min/max: %0.4f/%0.4f" % (
+    #         time.time(), C, float(person_scores.min()), float(person_scores.max())
+    #     ))
 
     keep = person_scores > PERSON_THRESH
     boxes = boxes[keep, :]
@@ -322,17 +322,17 @@ def main():
             
             now = time.time()
             
-            if not hasattr(main, "_last_health"):
-                main._last_health = 0
+            # if not hasattr(main, "_last_health"):
+            #     main._last_health = 0
 
-            if now - main._last_health > 1.0:
-                print("%s [%s] yolo_person=%d tracked=%d" % (
-                    datetime.datetime.now().strftime("%H:%M:%S"),
-                    camera_name,
-                    raw_count,
-                    tracked_count,
-                ))
-                main._last_health = now
+            # if now - main._last_health > 1.0:
+            #     print("%s [%s] yolo_person=%d tracked=%d" % (
+            #         datetime.datetime.now().strftime("%H:%M:%S"),
+            #         camera_name,
+            #         raw_count,
+            #         tracked_count,
+            #     ))
+            #     main._last_health = now
 
             # --- Person Analysis Loop ---
             # if time.time() - last_stats_update > 5:

@@ -30,7 +30,7 @@ services:
   ingest:
     build:
       context: .
-      dockerfile: Dockerfile.gpu
+      dockerfile: Dockerfile.cpu
     container_name: cctv-ingest
     depends_on:
       - mediamtx
@@ -45,7 +45,7 @@ services:
   analysis:
     build:
       context: .
-      dockerfile: Dockerfile.gpu
+      dockerfile: Dockerfile.cpu
     container_name: cctv-analysis
     depends_on:
       mediamtx:
@@ -65,24 +65,15 @@ services:
       - DB_PASS=password
       - FACE_MATCH_THRESHOLD=0.85
       - PYTHONUNBUFFERED=1
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
       - OMP_NUM_THREADS=1
       - MKL_NUM_THREADS=1
       - OPENBLAS_NUM_THREADS=1
       - NUMEXPR_NUM_THREADS=1
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [ gpu ]
 
   api:
     build:
       context: .
-      dockerfile: Dockerfile.gpu
+      dockerfile: Dockerfile.cpu
     container_name: cctv-api
     depends_on:
       postgres:
@@ -105,7 +96,7 @@ services:
   web:
     build:
       context: .
-      dockerfile: Dockerfile.gpu
+      dockerfile: Dockerfile.cpu
     container_name: cctv-web
     depends_on:
       postgres:
