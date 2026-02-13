@@ -51,53 +51,48 @@ async def startup_event():
     print("Service Ready.")
 
 # --- Helpers ---
-def process_sighting(embedding, camera_name):
+def process_sighting(embedding, camera_name, record=True):
     """
     Common logic for handling a face embedding:
     1. Identify person.
     2. Check for active sighting.
-    3. Merge or Create.
+    3. Merge or Create (if record=True).
     """
     # 1. Identify
     # get_best_match returns (name, similarity)
     name, similarity = db.get_best_match_with_score(embedding)
-    
-    # Threshold check? 
-    # get_best_match already handles threshold logic if we want, 
-    # but currently it just returns best match.
-    # We should probably define a threshold here or in DB.
-    # analyse_rtsp uses 0.5 or 0.4 depending on code.
-    # Let's use 0.5 as a safe default.
     
     identity_id = None
     if name != "Unknown" and similarity > 0.5:
         identity_id = db.get_identity_id_by_name(name)
     else:
         name = "Unknown"
-        
-    # 2. Check for active sighting
-    sighting_id = None
-    status = "created"
     
-    if identity_id:
-        sighting_id = db.get_active_sighting(camera_name, identity_id, threshold_seconds=15)
-        
-        if sighting_id:
-            # 3. Merge
-            db.update_sighting_end_time(sighting_id)
-            status = "merged"
-            db.update_last_seen(name, camera_name) # Heartbeat location
+    sighting_id = None
+    status = "identified"
+    
+    if record:
+        status = "created"
+        # 2. Check for active sighting
+        if identity_id:
+            sighting_id = db.get_active_sighting(camera_name, identity_id, threshold_seconds=15)
             
-    # If not merged, create new
-    if not sighting_id:
-        sighting_id = db.add_sighting(
-            image_path="api_vector_upload", 
-            embedding=embedding, 
-            identity_id=identity_id, 
-            camera=camera_name
-        )
-        if name != "Unknown":
-            db.update_last_seen(name, camera_name)
+            if sighting_id:
+                # 3. Merge
+                db.update_sighting_end_time(sighting_id)
+                status = "merged"
+                db.update_last_seen(name, camera_name) # Heartbeat location
+                
+        # If not merged, create new
+        if not sighting_id:
+            sighting_id = db.add_sighting(
+                image_path="api_vector_upload", 
+                embedding=embedding, 
+                identity_id=identity_id, 
+                camera=camera_name
+            )
+            if name != "Unknown":
+                db.update_last_seen(name, camera_name)
 
     # Return embedding too
     embedding_list = embedding.tolist() if isinstance(embedding, np.ndarray) else embedding
@@ -105,18 +100,44 @@ def process_sighting(embedding, camera_name):
     return {
         "status": status,
         "name": name,
-        "sighting_id": sighting_id,
+        "sighting_id": sighting_id if sighting_id else 0,
         "confidence": float(similarity) if similarity else 0.0,
         "embedding": embedding_list
     }
 
 # --- Endpoints ---
 
-@app.post("/detect_face", response_model=DetectResponse)
-async def detect_face(camera: str, file: UploadFile = File(...)):
+@app.post("/record_face_image", response_model=DetectResponse)
+async def record_face_image(camera: str, file: UploadFile = File(...)):
     """
     Upload an image. Detect face. Identify. Tracking.
     """
+    return await _handle_image(camera, file, record=True)
+
+@app.post("/identify_face_image", response_model=DetectResponse)
+async def identify_face_image(camera: str, file: UploadFile = File(...)):
+    """
+    [Read-Only] Upload an image. Detect face. Identify. NO Tracking.
+    """
+    return await _handle_image(camera, file, record=False)
+
+@app.post("/record_face_vector", response_model=DetectResponse)
+async def record_face_vector(request: RecognizeRequest):
+    """
+    Submit a vector. Identify. Tracking.
+    """
+    return _handle_vector(request, record=True)
+
+@app.post("/identify_face_vector", response_model=DetectResponse)
+async def identify_face_vector(request: RecognizeRequest):
+    """
+    [Read-Only] Submit a vector. Identify. NO Tracking.
+    """
+    return _handle_vector(request, record=False)
+
+# --- Internal Handlers ---
+
+async def _handle_image(camera: str, file: UploadFile, record: bool):
     # Read image
     contents = await file.read()
     nparr = np.frombuffer(contents, np.uint8)
@@ -137,32 +158,18 @@ async def detect_face(camera: str, file: UploadFile = File(...)):
         }
         
     # Pick largest face
-    # Sort by area (det is [x1, y1, x2, y2])
     faces.sort(key=lambda x: (x.bbox[2]-x.bbox[0]) * (x.bbox[3]-x.bbox[1]), reverse=True)
     face = faces[0]
     
-    # Process
-    result = process_sighting(face.embedding, camera)
-    
-    # If detecting from image, we might want to save the crop?
-    # For now, respecting "don't pollute" instruction, we stick to minimal logic.
-    # Future: Save crop to disk and update `image_path` in DB.
-    
-    return result
+    return process_sighting(face.embedding, camera, record=record)
 
-@app.post("/recognize_face", response_model=DetectResponse)
-async def recognize_face(request: RecognizeRequest):
-    """
-    Submit a vector. Identify. Tracking.
-    """
+def _handle_vector(request: RecognizeRequest, record: bool):
     embedding_np = np.array(request.embedding, dtype=np.float32)
     
     if embedding_np.shape != (512,):
         raise HTTPException(status_code=400, detail=f"Invalid embedding shape: {embedding_np.shape}. Expected 512.")
         
-    result = process_sighting(embedding_np, request.camera)
-    return result
-
+    return process_sighting(embedding_np, request.camera, record=record)
 @app.get("/health")
 def health():
     return {"status": "ok"}
