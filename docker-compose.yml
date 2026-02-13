@@ -61,6 +61,15 @@ services:
       - DB_PASS=password
       - FACE_MATCH_THRESHOLD=0.85
       - PYTHONUNBUFFERED=1
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
 
   api:
     build: .
