@@ -152,7 +152,7 @@ def handle_query(name=None, camera=None, date_str=None, order="DESC", limit=None
     rows = db.query_sightings(name=name, camera=camera, date_str=date_str, order=order, limit=limit)
     
     results = []
-    for s_id, path, ts, cam, p_name in rows:
+    for s_id, path, ts, cam, p_name, bbox in rows:
         results.append({
             "name": p_name if p_name else "Unknown",
             "camera": cam,

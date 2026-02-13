@@ -26,6 +26,7 @@ A comprehensive, containerized CCTV analysis system. It ingests RTSP streams, pe
 
 ### Prerequisites
 -   Docker & Docker Compose
+-   **For GPU Support**: NVIDIA Drivers and [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) must be installed.
 
 ### Configuration
 Edit `cameras.yml` to define your RTSP sources:
@@ -38,9 +39,16 @@ cameras:
     url: rtsp://192.168.1.101/stream1
 ```
 
-### Run
+### Run (GPU / Default)
+The default configuration is optimized for NVIDIA GPUs (Grace Blackwell, RTX, etc.).
 ```bash
 docker-compose up --build -d
+```
+
+### Run (CPU Only)
+To run on systems without an NVIDIA GPU (e.g., Mac M-series, standard Linux servers):
+```bash
+docker-compose -f docker-compose.cpu.yml up --build -d
 ```
 
 ### Access
@@ -52,11 +60,13 @@ docker-compose up --build -d
 
 To run without Docker (requires Python 3.10+, PostgreSQL running locally):
 
-1.  Install dependencies: `pip install -r requirements.txt`
-2.  Run Ingest: `python src/run_ingest.py cameras.yml`
-3.  Run Analysis: `python src/run_analysis.py cameras.yml`
-4.  Run API: `uvicorn src.api:app --reload`
-5.  Run Web App: `python src/identity_web_app.py`
+1.  **Install Dependencies**:
+    *   **GPU**: `pip install -r requirements.gpu.txt`
+    *   **CPU**: `pip install -r requirements.cpu.txt`
+2.  **Run Ingest**: `python src/run_ingest.py cameras.yml`
+3.  **Run Analysis**: `python src/run_analysis.py cameras.yml`
+4.  **Run API**: `uvicorn src.api:app --reload`
+5.  **Run Web App**: `python src/identity_web_app.py`
 
 ## Migration / Backup & Restore
 
