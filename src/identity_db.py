@@ -90,6 +90,15 @@ class IdentityDB:
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS camera_stats (
+                    camera TEXT PRIMARY KEY,
+                    frames_processed INTEGER DEFAULT 0,
+                    frames_skipped INTEGER DEFAULT 0,
+                    people_detected INTEGER DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
         self.conn.commit()
 
     def update_last_seen(self, name, camera, timestamp=None):
@@ -155,6 +164,26 @@ class IdentityDB:
             
         self.conn.commit()
         return deleted_files
+
+    def update_camera_stats(self, camera, processed, skipped, detected):
+        with self.conn.cursor() as cursor:
+            # Upsert stats
+            cursor.execute("""
+                INSERT INTO camera_stats (camera, frames_processed, frames_skipped, people_detected, updated_at)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (camera) DO UPDATE SET
+                    frames_processed = EXCLUDED.frames_processed,
+                    frames_skipped = EXCLUDED.frames_skipped,
+                    people_detected = EXCLUDED.people_detected,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (camera, processed, skipped, detected))
+        self.conn.commit()
+
+    def get_all_camera_stats(self):
+        with self.conn.cursor() as cursor:
+            cursor.execute("SELECT camera, frames_processed, frames_skipped, people_detected, updated_at FROM camera_stats ORDER BY camera ASC")
+            return cursor.fetchall()
+
 
     def get_known_faces(self):
         with self.conn.cursor() as cursor:

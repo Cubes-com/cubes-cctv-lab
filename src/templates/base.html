@@ -198,6 +198,7 @@
                     <span class="badge warning">{{ unknown_count }}</span>
                     {% endif %}
                 </a>
+                <a href="/stats" class="{% if request.path == '/stats' %}active{% endif %}">Stats</a>
             </nav>
         </div>
         {% block header_right %}{% endblock %}

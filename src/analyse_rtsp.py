@@ -15,6 +15,47 @@ import insightface
 # from mediapipe.tasks.python import vision
 from identity_db import IdentityDB
 from video_stream import LatestFrameReader
+import collections
+
+class StatsTracker:
+    def __init__(self, window_seconds=600):
+        self.window_seconds = window_seconds
+        self.processed_timestamps = collections.deque()
+        self.skipped_timestamps = collections.deque()
+        self.detection_counts = collections.deque() # Stores (timestamp, count) tuples
+        
+    def add_processed(self):
+        self.processed_timestamps.append(time.time())
+        
+    def add_skipped(self):
+        self.skipped_timestamps.append(time.time())
+        
+    def add_detection(self, count):
+        if count > 0:
+            self.detection_counts.append((time.time(), count))
+            
+    def prune(self):
+        now = time.time()
+        cutoff = now - self.window_seconds
+        
+        while self.processed_timestamps and self.processed_timestamps[0] < cutoff:
+            self.processed_timestamps.popleft()
+            
+        while self.skipped_timestamps and self.skipped_timestamps[0] < cutoff:
+            self.skipped_timestamps.popleft()
+            
+        while self.detection_counts and self.detection_counts[0][0] < cutoff:
+            self.detection_counts.popleft()
+            
+    def get_stats(self):
+        # We prune before getting stats to ensure accuracy
+        self.prune()
+        
+        processed = len(self.processed_timestamps)
+        skipped = len(self.skipped_timestamps)
+        detected = sum(count for _, count in self.detection_counts)
+        
+        return processed, skipped, detected
 
 def preprocess(frame, input_shape):
     # Resize to input_shape
@@ -135,6 +176,10 @@ def main():
 
     # 4. Init Identity DB
     db = IdentityDB()
+    
+    # 5. Stats Tracker
+    stats = StatsTracker(window_seconds=600)
+    last_stats_update = time.time()
 
     # Initialize Tracker
     tracker = sv.ByteTrack()
@@ -169,8 +214,18 @@ def main():
             ret, frame = cap.read()
             if not ret:
                 print("No frame yet. Waiting...")
+                stats.add_skipped()
                 time.sleep(1)
                 continue
+            
+            stats.add_processed()
+            frame_count += 1
+            
+            # --- Periodic Stats Update (Every 30s) ---
+            if time.time() - last_stats_update > 30:
+                p, s, d = stats.get_stats()
+                db.update_camera_stats(camera_name, p, s, d)
+                last_stats_update = time.time()
             
             # --- YOLO Inference ---
             img_data = preprocess(frame, input_shape)
@@ -179,6 +234,8 @@ def main():
             
             # Filter for Person (class_id == 0)
             detections = detections[detections.class_id == 0]
+            
+            stats.add_detection(len(detections))
 
             # Tracking
             detections = tracker.update_with_detections(detections)

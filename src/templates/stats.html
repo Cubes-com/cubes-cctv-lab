@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Camera Stats{% endblock %}
+
+{% block content %}
+<h2>Camera Performance (Last 10 Minutes)</h2>
+<p style="color: grey; margin-bottom: 20px;">
+    Stats are updated every 30 seconds.
+    <span
+        style="display:inline-block; width:10px; height:10px; background:var(--success); border-radius:50%; margin-left:10px;"></span>
+    &lt; 1 min
+    <span
+        style="display:inline-block; width:10px; height:10px; background:#ff9800; border-radius:50%; margin-left:10px;"></span>
+    &lt; 5 min
+    <span
+        style="display:inline-block; width:10px; height:10px; background:#cf6679; border-radius:50%; margin-left:10px;"></span>
+    &gt; 5 min
+</p>
+
+<div class="card" style="overflow-x: auto;">
+    <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+            <tr style="border-bottom: 1px solid #333;">
+                <th style="padding: 12px; color: var(--accent);">Camera</th>
+                <th style="padding: 12px; color: var(--accent);">Frames Processed</th>
+                <th style="padding: 12px; color: var(--accent);">Frames Skipped</th>
+                <th style="padding: 12px; color: var(--accent);">Detections (Events)</th>
+                <th style="padding: 12px; color: var(--accent);">Last Update</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in stats %}
+            <tr style="border-bottom: 1px solid #2a2a2a;">
+                <td style="padding: 12px; display: flex; align-items: center;">
+                    <div style="
+                        width: 10px; 
+                        height: 10px; 
+                        border-radius: 50%; 
+                        margin-right: 10px;
+                        background-color: 
+                            {% if row.status == 'green' %}var(--success)
+                            {% elif row.status == 'orange' %}#ff9800
+                            {% else %}#cf6679
+                            {% endif %};
+                    "></div>
+                    <b>{{ row.camera }}</b>
+                </td>
+                <td style="padding: 12px;">{{ row.processed }}</td>
+                <td style="padding: 12px;">{{ row.skipped }}</td>
+                <td style="padding: 12px;">{{ row.detected }}</td>
+                <td style="padding: 12px; color: var(--text-secondary);">{{ row.updated_at.strftime('%Y-%m-%d %H:%M:%S')
+                    }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="padding: 20px; text-align: center; color: var(--text-secondary);">No stats
+                    available yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Auto-refresh every 30 seconds
+    setTimeout(() => {
+        window.location.reload();
+    }, 30000);
+</script>
+{% endblock %}

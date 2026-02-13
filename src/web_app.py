@@ -282,6 +282,51 @@ def upload_identity():
     
     return redirect("/")
 
+@app.route("/stats")
+def stats():
+    db = get_db()
+    stats_data = db.get_all_camera_stats()
+    db.close()
+    
+    # Process for display
+    # (camera, processed, skipped, detected, updated_at)
+    formatted_stats = []
+    
+    # We need friendly names if available?
+    # For now just use camera code. 
+    # Actually, we can try to look up description if we had the config loaded.
+    # But for now, raw stats are fine.
+    
+    now = datetime.datetime.now()
+    
+    for row in stats_data:
+        cam, proc, skip, det, updated = row
+        
+        # Calculate status
+        # Green < 1 min, Orange < 5 min, Red > 5 min
+        if updated:
+            diff = (now - updated).total_seconds()
+        else:
+            diff = 999999
+            
+        if diff < 60:
+            status = "green"
+        elif diff < 300:
+            status = "orange"
+        else:
+            status = "red"
+            
+        formatted_stats.append({
+            "camera": cam,
+            "processed": proc,
+            "skipped": skip,
+            "detected": det,
+            "updated_at": updated,
+            "status": status
+        })
+        
+    return render_template("stats.html", stats=formatted_stats)
+
 if __name__ == "__main__":
     # Start cleanup thread
     # Check if this is the reloader process (to avoid running twice)
