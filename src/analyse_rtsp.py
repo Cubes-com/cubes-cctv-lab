@@ -18,11 +18,12 @@ from video_stream import LatestFrameReader
 import collections
 
 PERSON_ID = 0
-PERSON_THRESH = 0.25
+PERSON_THRESH = 0.20
 NMS_THRESH = 0.5
 NMS_SCORE = 0.20
-MIN_FACE_DETECTION_SCORE = 0.55
-MIN_FACE_SIZE = 20
+MIN_FACE_DETECTION_SCORE = 0.60
+MIN_FACE_SIZE = 24
+TRACKER_MIN_CONF = 0.30
 
 class StatsTracker:
     def __init__(self, window_seconds=600):
@@ -75,10 +76,6 @@ def preprocess(frame, input_shape):
     img_data = np.expand_dims(img_data, axis=0)
     return img_data
 
-# ... (skip to main loop content removal) ...
-# I cannot do two disjoint edits in one replace_file_content unless I use multi_replace.
-# I will use multi_replace_file_content.
-
 def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 
@@ -89,14 +86,25 @@ def postprocess(output, input_shape, original_shape):
     boxes = predictions[:, :4]
 
     if C == 84:
-        cls = predictions[:, 4:]  # (N, 80) assume already probs
+        cls = predictions[:, 4:]
+        if cls.min() < 0.0 or cls.max() > 1.0:
+            cls = sigmoid(cls)
         person_scores = cls[:, PERSON_ID]
     elif C == 85:
         obj = predictions[:, 4]
         cls = predictions[:, 5:]
+        if obj.min() < 0.0 or obj.max() > 1.0:
+            obj = sigmoid(obj)
+        if cls.min() < 0.0 or cls.max() > 1.0:
+            cls = sigmoid(cls)
         person_scores = obj * cls[:, PERSON_ID]
     else:
         raise ValueError("Unexpected YOLO output channels: %s" % (C,))
+
+    if np.random.rand() < 0.005:
+        print("DBG [%s] C=%d person min/max: %0.4f/%0.4f" % (
+            time.time(), C, float(person_scores.min()), float(person_scores.max())
+        ))
 
     keep = person_scores > PERSON_THRESH
     boxes = boxes[keep, :]
@@ -112,26 +120,49 @@ def postprocess(output, input_shape, original_shape):
 
     boxes_xyxy = []
     boxes_xywh = []
-    for box in boxes:
+    scores_keep = []
+    for j, box in enumerate(boxes):
         cx, cy, w, h = box
         cx *= x_factor; cy *= y_factor; w *= x_factor; h *= y_factor
+
+        if w <= 2 or h <= 2:
+            continue
+        if w > orig_w * 1.2 or h > orig_h * 1.2:
+            continue
 
         x1 = int(cx - w / 2); y1 = int(cy - h / 2)
         x2 = int(cx + w / 2); y2 = int(cy + h / 2)
 
-        boxes_xyxy.append([x1, y1, x2, y2])
-        boxes_xywh.append([x1, y1, int(w), int(h)])
+        # clamp
+        x1 = max(0, min(orig_w - 1, x1))
+        y1 = max(0, min(orig_h - 1, y1))
+        x2 = max(0, min(orig_w - 1, x2))
+        y2 = max(0, min(orig_h - 1, y2))
+        if x2 <= x1 or y2 <= y1:
+            continue
 
-    indices = cv2.dnn.NMSBoxes(boxes_xywh, scores.tolist(), NMS_SCORE, NMS_THRESH)
+        boxes_xyxy.append([x1, y1, x2, y2])
+        boxes_xywh.append([x1, y1, x2 - x1, y2 - y1])
+        scores_keep.append(float(scores[j]))
+
+    if len(scores_keep) == 0:
+        return sv.Detections.empty()
+
+    scores_arr = np.array(scores_keep, dtype=np.float32)
+    indices = cv2.dnn.NMSBoxes(boxes_xywh, scores_arr.tolist(), NMS_SCORE, NMS_THRESH)
+    if len(indices) == 0:
+        return sv.Detections.empty()
+    indices = indices.flatten()
+
+    keep2 = scores_arr[indices] > TRACKER_MIN_CONF
+    indices = indices[keep2]
     if len(indices) == 0:
         return sv.Detections.empty()
 
-    indices = indices.flatten()
-
     return sv.Detections(
-        xyxy=np.array(boxes_xyxy)[indices],
-        confidence=scores[indices],
-        class_id=np.zeros(len(indices), dtype=np.int64)  # all person
+        xyxy=np.array(boxes_xyxy, dtype=np.float32)[indices],
+        confidence=scores_arr[indices],
+        class_id=np.zeros(len(indices), dtype=np.int64)
     )
 
 def main():
@@ -281,17 +312,34 @@ def main():
             stats.add_detection(len(detections))
 
             # Tracking
+            raw_count = len(detections)
             detections = tracker.update_with_detections(detections)
+            tracked_count = 0 if detections.tracker_id is None else len(detections.tracker_id)
             
-            # --- Person Analysis Loop ---
             now = time.time()
             
+            if not hasattr(main, "_last_health"):
+                main._last_health = 0
+
+            if now - main._last_health > 1.0:
+                print("%s [%s] yolo_person=%d tracked=%d" % (
+                    datetime.datetime.now().strftime("%H:%M:%S"),
+                    camera_name,
+                    raw_count,
+                    tracked_count,
+                ))
+                main._last_health = now
+
+            # --- Person Analysis Loop ---
             # if time.time() - last_stats_update > 5:
             #     out0 = outputs[0]
             #     print("YOLO output shape:", out0.shape, "dtype:", out0.dtype,
             #         "min:", float(np.min(out0)), "max:", float(np.max(out0)))
-
-            for i, track_id in enumerate(detections.tracker_id):
+            if detections.tracker_id is None:
+                tracker_ids = []
+            else:
+                tracker_ids = detections.tracker_id
+            for i, track_id in enumerate(tracker_ids):
                 if track_id not in track_info:
                     track_info[track_id] = {
                         "name": "Unknown", 
@@ -330,7 +378,7 @@ def main():
                         try:
                             faces = face_app.get(person_crop)
                             if len(faces) > 0:
-                                face = faces[0] 
+                                face = max(faces, key=lambda f: float(f.det_score))
 
                                 fx1, fy1, fx2, fy2 = map(int, face.bbox)
                                 face_w = fx2 - fx1
