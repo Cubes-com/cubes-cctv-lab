@@ -8,6 +8,7 @@ class LatestFrameReader:
         self.reconnect_interval = reconnect_interval
         self.cap = None
         self.frame = None
+        self.frame_id = 0
         self.ret = False
         self.stopped = False
         self.lock = threading.Lock()
@@ -36,6 +37,7 @@ class LatestFrameReader:
                 if ret:
                     self.ret = True
                     self.frame = frame
+                    self.frame_id += 1
                     self.condition.notify_all() # Notify valid frame
                 else:
                     self.ret = False
@@ -46,15 +48,15 @@ class LatestFrameReader:
 
     def read(self):
         """
-        Returns the latest frame. 
-        Block until at least one frame is available if none yet.:w
+        Returns (ret, frame, frame_id). 
+        Block until at least one frame is available if none yet.
         """
         with self.lock:
             # If no frame yet, wait
             if self.frame is None:
                 self.condition.wait(timeout=5.0)
             
-            return self.ret, self.frame
+            return self.ret, self.frame, self.frame_id
 
     def stop(self):
         self.stopped = True

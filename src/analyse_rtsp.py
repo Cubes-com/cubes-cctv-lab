@@ -208,15 +208,28 @@ def main():
 
     prev_time = time.time()
     frame_count = 0
+    last_frame_id = -1
 
     try:
         while True:
-            ret, frame = cap.read()
+            ret, frame, frame_id = cap.read()
             if not ret:
                 print("No frame yet. Waiting...")
                 stats.add_skipped()
-                time.sleep(1)
+            # Ignore duplicate frames (consumer faster than producer)
+            if frame_id == last_frame_id:
+                time.sleep(0.01)
                 continue
+
+            # Calculate skipped frames
+            if last_frame_id != -1:
+                skipped_frames = frame_id - last_frame_id - 1
+                if skipped_frames > 0:
+                    # Optimized addition for large skips
+                    for _ in range(skipped_frames):
+                        stats.add_skipped()
+            
+            last_frame_id = frame_id
             
             stats.add_processed()
             frame_count += 1
