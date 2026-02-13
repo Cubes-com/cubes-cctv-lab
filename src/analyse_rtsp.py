@@ -181,7 +181,11 @@ def main():
     # 1. Load YOLO
     print(f"Loading YOLO model from {model_path}...")
     try:
-        session = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider", "CPUExecutionProvider"], provider_options=[{"use_tf32": "0"}, {}])
+        so = ort.SessionOptions()
+        so.intra_op_num_threads = 1
+        so.inter_op_num_threads = 1
+        so.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+        session = ort.InferenceSession(model_path, sess_options=so, providers=["CUDAExecutionProvider", "CPUExecutionProvider"], provider_options=[{"use_tf32": "0"}, {}])
     except Exception as e:
         print(f"Failed to load YOLO model: {e}")
         return
