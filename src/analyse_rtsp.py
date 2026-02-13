@@ -83,17 +83,24 @@ def postprocess(output, input_shape, original_shape):
     # print("boxes min/max:", float(np.min(predictions[:, :4])), float(np.max(predictions[:, :4])))
     # print("class min/max:", float(np.min(predictions[:, 4:])), float(np.max(predictions[:, 4:])))
 
-    scores = np.max(predictions[:, 4:], axis=1)
+    obj = predictions[:, 4]
+    cls = predictions[:, 5:]  # 80 classes
+
+    class_ids = np.argmax(cls, axis=1)
+    class_scores = cls[np.arange(cls.shape[0]), class_ids]
+
+    scores = obj * class_scores
+
     keep = scores > SCORE_THRESH
     predictions = predictions[keep, :]
     scores = scores[keep]
+    class_ids = class_ids[keep]
+
+    print("top classes:", np.unique(class_ids)[:20], "max score:", float(scores.max()))
 
     if len(scores) == 0:
         return sv.Detections.empty()
 
-    # print("max score:", float(scores.max()), "kept:", int((scores > SCORE_THRESH).sum()))
-
-    class_ids = np.argmax(predictions[:, 4:], axis=1)
     boxes = predictions[:, :4]
     
     input_h, input_w = input_shape
@@ -151,7 +158,7 @@ def main():
     # 1. Load YOLO
     print(f"Loading YOLO model from {model_path}...")
     try:
-        session = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+        session = ort.InferenceSession(model_path, providers=["CUDAExecutionProvider", "CPUExecutionProvider"], provider_options=[{"use_tf32": "0"}, {}])
     except Exception as e:
         print(f"Failed to load YOLO model: {e}")
         return
@@ -174,7 +181,7 @@ def main():
     print("Initializing Face Analysis (w/ partial SCRFD)...")
     # buffalo_s uses DET_500M (SCRFD/RetinaFace)
     # Increasing det_thresh to 0.65 to avoid back-of-head detections
-    face_app = insightface.app.FaceAnalysis(name='buffalo_s', providers=["CUDAExecutionProvider", 'CPUExecutionProvider'])
+    face_app = insightface.app.FaceAnalysis(name='buffalo_s', providers=["CUDAExecutionProvider", 'CPUExecutionProvider'], provider_options=[{"use_tf32": "0"}, {}])
     face_app.prepare(ctx_id=0, det_size=(640, 640), det_thresh=0.65)
     
     # 3. Init Gesture Recognizer (MediaPipe) - DISABLED
