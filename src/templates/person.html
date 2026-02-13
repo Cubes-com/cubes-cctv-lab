@@ -34,28 +34,30 @@
     {% for sighting in sightings %}
     <div class="card sighting-card {% if sighting.is_permanent %}confirmed{% else %}unconfirmed{% endif %}"
         data-id="{{ sighting.id }}">
-        <div style="position: relative;">
-            <img src="/image/{{ sighting.id }}" alt="Sighting {{ sighting.id }}"
-                style="width: 100%; border-radius: 4px;">
+        <div style="text-align: center;">
+            <div style="position: relative; display: inline-block;">
+                <img src="/image/{{ sighting.id }}" alt="Sighting {{ sighting.id }}"
+                    style="max-height: 400px; max-width: 100%; width: auto; border-radius: 4px; display: block;">
 
-            <div class="confirmed-badge"
-                style="position: absolute; top: 5px; right: 5px; background: green; color: white; padding: 2px 5px; border-radius: 4px; font-size: 0.8em; z-index: 10; {% if not sighting.is_permanent %}display: none;{% endif %}">
-                Confirmed
+                <div class="confirmed-badge"
+                    style="position: absolute; top: 5px; right: 5px; background: green; color: white; padding: 2px 5px; border-radius: 4px; font-size: 0.8em; z-index: 10; {% if not sighting.is_permanent %}display: none;{% endif %}">
+                    Confirmed
+                </div>
+
+                {% if sighting.bbox %}
+                <!-- Draw Bounding Box -->
+                <div class="bbox-overlay" style="
+                    position: absolute;
+                    left: {{ sighting.bbox[0] * 100 }}%;
+                    top: {{ sighting.bbox[1] * 100 }}%;
+                    width: {{ (sighting.bbox[2] - sighting.bbox[0]) * 100 }}%;
+                    height: {{ (sighting.bbox[3] - sighting.bbox[1]) * 100 }}%;
+                    border: 2px solid {% if sighting.is_permanent %}#00ff00{% else %}#ff0000{% endif %};
+                    pointer-events: none;
+                    z-index: 5;
+                "></div>
+                {% endif %}
             </div>
-
-            {% if sighting.bbox %}
-            <!-- Draw Bounding Box -->
-            <div class="bbox-overlay" style="
-                position: absolute;
-                left: {{ sighting.bbox[0] * 100 }}%;
-                top: {{ sighting.bbox[1] * 100 }}%;
-                width: {{ (sighting.bbox[2] - sighting.bbox[0]) * 100 }}%;
-                height: {{ (sighting.bbox[3] - sighting.bbox[1]) * 100 }}%;
-                border: 2px solid {% if sighting.is_permanent %}#00ff00{% else %}#ff0000{% endif %};
-                pointer-events: none;
-                z-index: 5;
-            "></div>
-            {% endif %}
         </div>
         <p class="time">{{ sighting.timestamp }}</p>
 

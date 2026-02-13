@@ -22,22 +22,24 @@
 <div class="grid">
     {% for sighting in sightings %}
     <div class="card">
-        <div style="position: relative;">
-            <img src="/image/{{ sighting.id }}" alt="Sighting {{ sighting.id }}"
-                style="width: 100%; border-radius: 4px;">
+        <div style="text-align: center;">
+            <div style="position: relative; display: inline-block;">
+                <img src="/image/{{ sighting.id }}" alt="Sighting {{ sighting.id }}"
+                    style="max-height: 400px; max-width: 100%; width: auto; border-radius: 4px; display: block;">
 
-            {% if sighting.bbox %}
-            <!-- Draw Bounding Box (Red for Unconfirmed) -->
-            <div style="
-                position: absolute;
-                left: {{ sighting.bbox[0] * 100 }}%;
-                top: {{ sighting.bbox[1] * 100 }}%;
-                width: {{ (sighting.bbox[2] - sighting.bbox[0]) * 100 }}%;
-                height: {{ (sighting.bbox[3] - sighting.bbox[1]) * 100 }}%;
-                border: 2px solid #ff0000;
-                pointer-events: none;
-            "></div>
-            {% endif %}
+                {% if sighting.bbox %}
+                <!-- Draw Bounding Box (Red for Unconfirmed) -->
+                <div style="
+                    position: absolute;
+                    left: {{ sighting.bbox[0] * 100 }}%;
+                    top: {{ sighting.bbox[1] * 100 }}%;
+                    width: {{ (sighting.bbox[2] - sighting.bbox[0]) * 100 }}%;
+                    height: {{ (sighting.bbox[3] - sighting.bbox[1]) * 100 }}%;
+                    border: 2px solid #ff0000;
+                    pointer-events: none;
+                "></div>
+                {% endif %}
+            </div>
         </div>
         <p class="time">{{ sighting.timestamp }}</p>
 
