@@ -76,6 +76,10 @@ def postprocess(output, input_shape, original_shape):
     # output shape is (1, 84, 8400)
     predictions = np.squeeze(output).T  # (8400, 84)
 
+    # DEBUG one-time
+    print("boxes min/max:", float(np.min(predictions[:, :4])), float(np.max(predictions[:, :4])))
+    print("class min/max:", float(np.min(predictions[:, 4:])), float(np.max(predictions[:, 4:])))
+
     scores = np.max(predictions[:, 4:], axis=1)
     predictions = predictions[scores > 0.5, :]
     scores = scores[scores > 0.5]
