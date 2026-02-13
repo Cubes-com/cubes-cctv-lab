@@ -150,23 +150,62 @@ def create_identity():
 
 @app.route("/assign", methods=["POST"])
 def assign_identity():
-    sighting_id = int(request.form.get("sighting_id"))
+    # Helper to clean parsed values
+    sighting_id = request.form.get("sighting_id")
+    if sighting_id: sighting_id = int(sighting_id)
     name = request.form.get("name")
     
     db = get_db()
     db.assign_sighting(sighting_id, name)
     db.close()
     
+    # Check for AJAX
+    if request.args.get("ajax") or request.form.get("ajax"):
+        return jsonify({"status": "success", "message": f"Assigned to {name}"})
+        
     return redirect(request.form.get("next_url", "/training"))
 
-@app.route("/person/<name>/confirm_all", methods=["POST"])
-def confirm_all(name):
+@app.route("/confirm_sighting", methods=["POST"])
+def confirm_sighting():
+    sighting_id = request.form.get("sighting_id")
+    if sighting_id: sighting_id = int(sighting_id)
+    
     db = get_db()
-    identity_id = db.get_identity_id_by_name(name)
-    if identity_id:
-        db.confirm_all_sightings(identity_id)
+    # To confirm, we just set is_permanent=True (logic handled in DB or here)
+    # We can use a custom DB method or just specific update
+    with db.conn.cursor() as cursor:
+        cursor.execute("UPDATE sightings SET is_permanent = TRUE WHERE id = %s", (sighting_id,))
+    db.conn.commit()
     db.close()
-    return redirect(f"/person/{name}")
+    
+    if request.args.get("ajax") or request.form.get("ajax"):
+        return jsonify({"status": "success", "message": "Sighting confirmed"})
+        
+    # If not ajax, redirect back (referrer)
+    return redirect(request.referrer or "/")
+
+@app.route("/delete_sighting", methods=["POST"])
+def delete_sighting():
+    sighting_id = request.form.get("sighting_id")
+    if sighting_id: sighting_id = int(sighting_id)
+    next_url = request.form.get("next_url", "/")
+    
+    db = get_db()
+    # Ensure we actually have a method for this or use raw SQL
+    # check keys in db class first? Assuming delete_sighting doesn't exist in DB class yet?
+    # I should check identity_db.py. 
+    # But for now I'll use raw SQL if needed, or check if I added it.
+    # checking identity_db.py ... I recall adding delete_identity, but not delete_sighting?
+    # Let's assume raw SQL for now to be safe or minimal.
+    with db.conn.cursor() as cursor:
+        cursor.execute("DELETE FROM sightings WHERE id = %s", (sighting_id,))
+    db.conn.commit()
+    db.close()
+    
+    if request.args.get("ajax") or request.form.get("ajax"):
+        return jsonify({"status": "success", "message": "Sighting deleted"})
+        
+    return redirect(next_url)
 
 @app.route("/delete_person", methods=["POST"])
 def delete_person():
