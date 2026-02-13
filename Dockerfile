@@ -1,45 +1,37 @@
-FROM python:3.10-slim
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
 
-# ---- system deps + NVIDIA CUDA apt repo keyring ----
+ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /app
+
+# System deps + Python 3.10 (native on 22.04) + runtime libs your app needs
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    wget \
-    gnupg \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-venv \
+    build-essential \
     ffmpeg \
     libgl1 \
     libglib2.0-0 \
     libpq-dev \
-    build-essential \
-    python3-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Add NVIDIA CUDA repo (Ubuntu 24.04) so we can install cuBLAS/cuDNN runtime libs
-RUN wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb \
-    && dpkg -i cuda-keyring_1.1-1_all.deb \
-    && rm -f cuda-keyring_1.1-1_all.deb
+# Make "python" and "pip" available (optional, but handy)
+RUN ln -sf /usr/bin/python3 /usr/local/bin/python \
+    && ln -sf /usr/bin/pip3 /usr/local/bin/pip
 
-# Install CUDA 12 runtime libs required by onnxruntime-gpu CUDA EP
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libcublaslt12 \
-    libcublas12 \
-    libcudnn9-cuda-12 \
-    && rm -rf /var/lib/apt/lists/* \
-    && ldconfig
-
-WORKDIR /app
-
-# Upgrade pip and build tools
+# Upgrade pip tooling
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Optional: quick visibility into whether ORT sees CUDA at build time
-# (This doesn't guarantee runtime GPU access, but confirms the CUDA EP can load its libs.)
+# Quick check: does ORT see CUDA EP?
 RUN python -c "import onnxruntime as ort; print(ort.__version__); print(ort.get_available_providers())" || true
 
-# Preload models to avoid race conditions at runtime
+# Preload models
 COPY src/preload_models.py .
 RUN python3 preload_models.py
 
