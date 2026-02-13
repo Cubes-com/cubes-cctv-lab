@@ -333,11 +333,11 @@ def main():
                                 fx1, fy1, fx2, fy2 = map(int, face.bbox)
                                 face_w = fx2 - fx1
                                 face_h = fy2 - fy1
-                                if face_w < 40 or face_h < 40:
+                                if face_w < 25 or face_h < 25:
                                     continue
 
                                 # Extra strict check just in case
-                                if face.det_score < 0.75:
+                                if face.det_score < 0.65:
                                     continue
                                     
                                 info["last_face_seen"] = now
