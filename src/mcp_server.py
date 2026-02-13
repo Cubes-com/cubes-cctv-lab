@@ -86,7 +86,7 @@ def query_sightings(
         return "No sightings found matching criteria."
         
     results = []
-    for s_id, path, ts, cam, p_name in rows:
+    for s_id, path, ts, cam, p_name, bbox in rows:
         desc = map_camera_description(cam)
         results.append(f"[{ts}] {p_name} at {desc} ({cam})")
         
