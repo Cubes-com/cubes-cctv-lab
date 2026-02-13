@@ -106,7 +106,7 @@ def postprocess(output, input_shape, original_shape):
         return sv.Detections.empty()
 
     top = np.sort(scores)[-min(5, len(scores)):]
-    print("max score:", float(scores.max()), "top5:", top.tolist(), "classes:", np.unique(class_ids)[:20])
+    # print("max score:", float(scores.max()), "top5:", top.tolist(), "classes:", np.unique(class_ids)[:20])
 
     input_h, input_w = input_shape
     orig_h, orig_w = original_shape
@@ -134,7 +134,7 @@ def postprocess(output, input_shape, original_shape):
         boxes_xywh.append([x1, y1, int(w), int(h)])
 
     indices = cv2.dnn.NMSBoxes(boxes_xywh, scores.tolist(), SCORE_THRESH, NMS_THRESH)
-    print("nms indices:", 0 if len(indices) == 0 else len(indices))
+    # print("nms indices:", 0 if len(indices) == 0 else len(indices))
 
     if len(indices) == 0:
         return sv.Detections.empty()
@@ -281,15 +281,15 @@ def main():
             outputs = session.run([output_name], {input_name: img_data})
             detections = postprocess(outputs[0], input_shape, frame.shape[:2])
 
-            print("pre-filter count:", len(detections))
-            if len(detections) > 0:
-                print("unique class_ids:", np.unique(detections.class_id)[:20])
-                print("conf min/max:", float(detections.confidence.min()), float(detections.confidence.max()))
+            # print("pre-filter count:", len(detections))
+            # if len(detections) > 0:
+            #     print("unique class_ids:", np.unique(detections.class_id)[:20])
+            #     print("conf min/max:", float(detections.confidence.min()), float(detections.confidence.max()))
 
             # Filter for Person (class_id == 0)
             detections = detections[detections.class_id == 0]
             
-            print("post-filter person count:", len(detections))
+            # print("post-filter person count:", len(detections))
 
             stats.add_detection(len(detections))
 
@@ -299,10 +299,10 @@ def main():
             # --- Person Analysis Loop ---
             now = time.time()
             
-            if time.time() - last_stats_update > 5:
-                out0 = outputs[0]
-                print("YOLO output shape:", out0.shape, "dtype:", out0.dtype,
-                    "min:", float(np.min(out0)), "max:", float(np.max(out0)))
+            # if time.time() - last_stats_update > 5:
+            #     out0 = outputs[0]
+            #     print("YOLO output shape:", out0.shape, "dtype:", out0.dtype,
+            #         "min:", float(np.min(out0)), "max:", float(np.max(out0)))
 
             for i, track_id in enumerate(detections.tracker_id):
                 if track_id not in track_info:
