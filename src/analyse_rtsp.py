@@ -73,26 +73,21 @@ def preprocess(frame, input_shape):
 # I will use multi_replace_file_content.
 
 def postprocess(output, input_shape, original_shape):
-    # output shape is (1, 84, 8400)
     predictions = np.squeeze(output).T  # (8400, 84)
 
     SCORE_THRESH = 0.05
     NMS_THRESH = 0.5
 
-    # predictions shape: (N, C) where C is 84 (4+80) or 85 (4+1+80)
     C = predictions.shape[1]
-
     boxes = predictions[:, :4]
 
     if C == 84:
-        # YOLOv8 ONNX export variant where class scores are already "final" (no explicit obj)
-        cls = predictions[:, 4:]  # (N,80)
+        cls = predictions[:, 4:]
         class_ids = np.argmax(cls, axis=1)
         scores = cls[np.arange(cls.shape[0]), class_ids]
     elif C == 85:
-        # Variant with explicit objectness at index 4
         obj = predictions[:, 4]
-        cls = predictions[:, 5:]  # (N,80)
+        cls = predictions[:, 5:]
         class_ids = np.argmax(cls, axis=1)
         class_scores = cls[np.arange(cls.shape[0]), class_ids]
         scores = obj * class_scores
@@ -107,42 +102,40 @@ def postprocess(output, input_shape, original_shape):
     if len(scores) == 0:
         return sv.Detections.empty()
 
-    top = np.sort(scores)[-5:]
+    top = np.sort(scores)[-min(5, len(scores)):]
     print("max score:", float(scores.max()), "top5:", top.tolist(), "classes:", np.unique(class_ids)[:20])
 
-    boxes = predictions[:, :4]
-    
     input_h, input_w = input_shape
     orig_h, orig_w = original_shape
-    
+
     x_factor = orig_w / input_w
     y_factor = orig_h / input_h
 
     boxes_xyxy = []
     boxes_xywh = []
-    
+
     for box in boxes:
         cx, cy, w, h = box
-        
-        # Scale back to original image
+
         cx *= x_factor
         cy *= y_factor
         w *= x_factor
         h *= y_factor
-        
+
         x1 = int(cx - w/2)
         y1 = int(cy - h/2)
         x2 = int(cx + w/2)
         y2 = int(cy + h/2)
-        
+
         boxes_xyxy.append([x1, y1, x2, y2])
         boxes_xywh.append([x1, y1, int(w), int(h)])
-        
+
     indices = cv2.dnn.NMSBoxes(boxes_xywh, scores.tolist(), SCORE_THRESH, NMS_THRESH)
-    print("nms indices:", 0 if len(indices)==0 else len(indices))
+    print("nms indices:", 0 if len(indices) == 0 else len(indices))
+
     if len(indices) == 0:
         return sv.Detections.empty()
-        
+
     indices = indices.flatten()
 
     return sv.Detections(
