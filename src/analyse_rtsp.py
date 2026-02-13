@@ -78,7 +78,7 @@ def sigmoid(x):
 def postprocess(output, input_shape, original_shape):
     predictions = np.squeeze(output).T  # (8400, 84)
 
-    SCORE_THRESH = 0.2
+    SCORE_THRESH = 0.5
     NMS_THRESH = 0.5
 
     C = predictions.shape[1]
