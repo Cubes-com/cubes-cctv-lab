@@ -17,6 +17,13 @@ from identity_db import IdentityDB
 from video_stream import LatestFrameReader
 import collections
 
+PERSON_ID = 0
+PERSON_THRESH = 0.25
+NMS_THRESH = 0.5
+NMS_SCORE = 0.20
+MIN_FACE_DETECTION_SCORE = 0.55
+MIN_FACE_SIZE = 20
+
 class StatsTracker:
     def __init__(self, window_seconds=600):
         self.window_seconds = window_seconds
@@ -77,11 +84,6 @@ def sigmoid(x):
 
 def postprocess(output, input_shape, original_shape):
     predictions = np.squeeze(output).T  # (8400, C)
-
-    PERSON_ID = 0
-    PERSON_THRESH = 0.35   # start here
-    NMS_THRESH = 0.5
-    NMS_SCORE = 0.20       # for cv2 NMSBoxes; can be lower than PERSON_THRESH
 
     C = predictions.shape[1]
     boxes = predictions[:, :4]
@@ -333,11 +335,11 @@ def main():
                                 fx1, fy1, fx2, fy2 = map(int, face.bbox)
                                 face_w = fx2 - fx1
                                 face_h = fy2 - fy1
-                                if face_w < 25 or face_h < 25:
+                                if face_w < MIN_FACE_SIZE or face_h < MIN_FACE_SIZE:
                                     continue
 
                                 # Extra strict check just in case
-                                if face.det_score < 0.65:
+                                if face.det_score < MIN_FACE_DETECTION_SCORE:
                                     continue
                                     
                                 info["last_face_seen"] = now
@@ -488,6 +490,9 @@ def main():
                 # Throttle log to once every 2 seconds per person
                 last_log = info.get("last_log_time", 0)
                 if (now - last_log) > 2.0:
+                    if name == "Unknown":
+                        if (now - info.get("last_face_seen", 0)) > 5.0:
+                            continue
                     print(log_msg)
                     info["last_log_time"] = now
 
