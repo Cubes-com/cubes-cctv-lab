@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sys
 import time
@@ -120,13 +121,11 @@ def build_ffmpeg_cmd(cam, defaults, mediamtx_host, mediamtx_port):
         cmd.append(out_url)
 
     return cmd
-
-
-def spawn_loop(cam, defaults, mediamtx_host, mediamtx_port, logs_dir, stop_flag):
+def spawn_loop(cam, defaults, mediamtx_host, mediamtx_port, logs_dir, stop_event):
     name = cam["name"]
     log_path = os.path.join(logs_dir, "%s.log" % name)
 
-    while not stop_flag["stop"]:
+    while not stop_event.is_set():
         cmd = build_ffmpeg_cmd(cam, defaults, mediamtx_host, mediamtx_port)
         with open(log_path, "a") as logf:
             logf.write("\n--- starting ffmpeg for %s at %s ---\n" % (name, time.ctime()))
@@ -136,7 +135,7 @@ def spawn_loop(cam, defaults, mediamtx_host, mediamtx_port, logs_dir, stop_flag)
             try:
                 p = subprocess.Popen(cmd, stdout=logf, stderr=logf)
                 while True:
-                    if stop_flag["stop"]:
+                    if stop_event.is_set():
                         try:
                             p.terminate()
                         except Exception:
@@ -182,10 +181,10 @@ def main():
     if not os.path.isdir(logs_dir):
         os.makedirs(logs_dir)
 
-    stop_flag = {"stop": False}
+    stop_event = multiprocessing.Event()
 
     def handle_sig(signum, frame):
-        stop_flag["stop"] = True
+        stop_event.set()
 
     signal.signal(signal.SIGINT, handle_sig)
     signal.signal(signal.SIGTERM, handle_sig)
@@ -193,23 +192,26 @@ def main():
     procs = []
     # One supervisor process per camera (simple + robust)
     for cam in cameras:
-        # Use a small python process per camera by re-invoking self is overkill;
-        # instead we fork via subprocess? On mac, simplest is threads.
-        # But threads + subprocess is fine here.
-        import threading
-        t = threading.Thread(
+        # Using multiprocessing.Process to avoid GIL contention
+        p = multiprocessing.Process(
             target=spawn_loop,
-            args=(cam, defaults, mediamtx_host, mediamtx_port, logs_dir, stop_flag),
+            args=(cam, defaults, mediamtx_host, mediamtx_port, logs_dir, stop_event),
             daemon=True
         )
-        t.start()
-        procs.append(t)
+        p.start()
+        procs.append(p)
 
     print("Restreaming %d cameras into MediaMTX at rtsp://%s:%d/NAME" % (len(cameras), mediamtx_host, mediamtx_port))
     print("Press Ctrl+C to stop.")
-    while not stop_flag["stop"]:
+    
+    # Main loop just waits for stop signal
+    while not stop_event.is_set():
         time.sleep(0.5)
 
+    print("Stopping ingest processes...")
+    for p in procs:
+        p.terminate() # or join if we want them to finish cleanly, but terminate is faster for ffmpeg
+        p.join()
 
 if __name__ == "__main__":
     main()
