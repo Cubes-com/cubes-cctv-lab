@@ -80,8 +80,8 @@ def postprocess(output, input_shape, original_shape):
     NMS_THRESH = 0.5    # start here
 
     # DEBUG one-time
-    print("boxes min/max:", float(np.min(predictions[:, :4])), float(np.max(predictions[:, :4])))
-    print("class min/max:", float(np.min(predictions[:, 4:])), float(np.max(predictions[:, 4:])))
+    # print("boxes min/max:", float(np.min(predictions[:, :4])), float(np.max(predictions[:, :4])))
+    # print("class min/max:", float(np.min(predictions[:, 4:])), float(np.max(predictions[:, 4:])))
 
     scores = np.max(predictions[:, 4:], axis=1)
     keep = scores > SCORE_THRESH
@@ -91,7 +91,7 @@ def postprocess(output, input_shape, original_shape):
     if len(scores) == 0:
         return sv.Detections.empty()
 
-    print("max score:", float(scores.max()), "kept:", int((scores > SCORE_THRESH).sum()))
+    # print("max score:", float(scores.max()), "kept:", int((scores > SCORE_THRESH).sum()))
 
     class_ids = np.argmax(predictions[:, 4:], axis=1)
     boxes = predictions[:, :4]
@@ -123,9 +123,10 @@ def postprocess(output, input_shape, original_shape):
         boxes_xywh.append([x1, y1, int(w), int(h)])
         
     indices = cv2.dnn.NMSBoxes(boxes_xywh, scores.tolist(), SCORE_THRESH, NMS_THRESH)
+    print("nms indices:", 0 if len(indices)==0 else len(indices))
     if len(indices) == 0:
         return sv.Detections.empty()
-    
+        
     indices = indices.flatten()
 
     return sv.Detections(
@@ -156,6 +157,7 @@ def main():
         return
 
     print("ORT providers:", ort.get_available_providers())
+    print("Session providers:", session.get_providers())
     print("Model inputs:")
     for i in session.get_inputs():
         print("  -", i.name, i.shape, i.type)
@@ -266,10 +268,17 @@ def main():
             img_data = preprocess(frame, input_shape)
             outputs = session.run([output_name], {input_name: img_data})
             detections = postprocess(outputs[0], input_shape, frame.shape[:2])
-            
+
+            print("pre-filter count:", len(detections))
+            if len(detections) > 0:
+                print("unique class_ids:", np.unique(detections.class_id)[:20])
+                print("conf min/max:", float(detections.confidence.min()), float(detections.confidence.max()))
+
             # Filter for Person (class_id == 0)
             detections = detections[detections.class_id == 0]
             
+            print("post-filter person count:", len(detections))
+
             stats.add_detection(len(detections))
 
             # Tracking
