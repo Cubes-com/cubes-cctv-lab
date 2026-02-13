@@ -244,11 +244,7 @@ def main():
             
             stats.add_processed()
             frame_count += 1
-            
-            if time.time() - last_stats_update > 5:
-                out0 = outputs[0]
-                print("YOLO output shape:", out0.shape, "dtype:", out0.dtype,
-                    "min:", float(np.min(out0)), "max:", float(np.max(out0)))
+        
 
             # --- Periodic Stats Update (Every 30s) ---
             if time.time() - last_stats_update > 30:
@@ -272,6 +268,11 @@ def main():
             # --- Person Analysis Loop ---
             now = time.time()
             
+            if time.time() - last_stats_update > 5:
+                out0 = outputs[0]
+                print("YOLO output shape:", out0.shape, "dtype:", out0.dtype,
+                    "min:", float(np.min(out0)), "max:", float(np.max(out0)))
+
             for i, track_id in enumerate(detections.tracker_id):
                 if track_id not in track_info:
                     track_info[track_id] = {
