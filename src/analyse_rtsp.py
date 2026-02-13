@@ -76,7 +76,7 @@ def postprocess(output, input_shape, original_shape):
     # output shape is (1, 84, 8400)
     predictions = np.squeeze(output).T  # (8400, 84)
 
-    SCORE_THRESH = 0.2  # start here
+    SCORE_THRESH = 0.05  # start here
     NMS_THRESH = 0.5    # start here
 
     # DEBUG one-time
@@ -96,10 +96,11 @@ def postprocess(output, input_shape, original_shape):
     scores = scores[keep]
     class_ids = class_ids[keep]
 
-    print("top classes:", np.unique(class_ids)[:20], "max score:", float(scores.max()))
-
     if len(scores) == 0:
         return sv.Detections.empty()
+
+    top = np.sort(scores)[-5:]
+    print("max score:", float(scores.max()), "top5:", top.tolist(), "classes:", np.unique(class_ids)[:20])
 
     boxes = predictions[:, :4]
     
@@ -505,7 +506,10 @@ def main():
     except KeyboardInterrupt:
         print("\nStopping...")
     finally:
-        cap.release()
+        if hasattr(cap, "release"):
+            cap.release()
+        elif hasattr(cap, "close"):
+            cap.close()
         cv2.destroyAllWindows()
         db.close()
 
