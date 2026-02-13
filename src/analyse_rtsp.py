@@ -76,74 +76,51 @@ def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
 
 def postprocess(output, input_shape, original_shape):
-    predictions = np.squeeze(output).T  # (8400, 84)
+    predictions = np.squeeze(output).T  # (8400, C)
 
-    SCORE_THRESH = 0.5
+    PERSON_ID = 0
+    PERSON_THRESH = 0.35   # start here
     NMS_THRESH = 0.5
+    NMS_SCORE = 0.20       # for cv2 NMSBoxes; can be lower than PERSON_THRESH
 
     C = predictions.shape[1]
     boxes = predictions[:, :4]
 
-    PERSON_ID = 0
-
     if C == 84:
-        cls = sigmoid(predictions[:, 4:])  # (N,80)
-        person_scores = cls[:, PERSON_ID]  # (N,)
-        keep = person_scores > SCORE_THRESH
-        boxes = boxes[keep, :]
-        scores = person_scores[keep]
-        class_ids = np.full(scores.shape, PERSON_ID, dtype=np.int64)
-
+        cls = predictions[:, 4:]  # (N, 80) assume already probs
+        person_scores = cls[:, PERSON_ID]
     elif C == 85:
-        obj = sigmoid(predictions[:, 4])    # (N,)
-        cls = sigmoid(predictions[:, 5:])   # (N,80)
+        obj = predictions[:, 4]
+        cls = predictions[:, 5:]
         person_scores = obj * cls[:, PERSON_ID]
-        keep = person_scores > SCORE_THRESH
-        boxes = boxes[keep, :]
-        scores = person_scores[keep]
-        class_ids = np.full(scores.shape, PERSON_ID, dtype=np.int64)
     else:
         raise ValueError("Unexpected YOLO output channels: %s" % (C,))
 
-    keep = scores > SCORE_THRESH
+    keep = person_scores > PERSON_THRESH
     boxes = boxes[keep, :]
-    scores = scores[keep]
-    class_ids = class_ids[keep]
+    scores = person_scores[keep]
 
-    if len(scores) == 0:
+    if scores.size == 0:
         return sv.Detections.empty()
-
-    top = np.sort(scores)[-min(5, len(scores)):]
-    # print("max score:", float(scores.max()), "top5:", top.tolist(), "classes:", np.unique(class_ids)[:20])
 
     input_h, input_w = input_shape
     orig_h, orig_w = original_shape
-
     x_factor = orig_w / input_w
     y_factor = orig_h / input_h
 
     boxes_xyxy = []
     boxes_xywh = []
-
     for box in boxes:
         cx, cy, w, h = box
+        cx *= x_factor; cy *= y_factor; w *= x_factor; h *= y_factor
 
-        cx *= x_factor
-        cy *= y_factor
-        w *= x_factor
-        h *= y_factor
-
-        x1 = int(cx - w/2)
-        y1 = int(cy - h/2)
-        x2 = int(cx + w/2)
-        y2 = int(cy + h/2)
+        x1 = int(cx - w / 2); y1 = int(cy - h / 2)
+        x2 = int(cx + w / 2); y2 = int(cy + h / 2)
 
         boxes_xyxy.append([x1, y1, x2, y2])
         boxes_xywh.append([x1, y1, int(w), int(h)])
 
-    indices = cv2.dnn.NMSBoxes(boxes_xywh, scores.tolist(), SCORE_THRESH, NMS_THRESH)
-    # print("nms indices:", 0 if len(indices) == 0 else len(indices))
-
+    indices = cv2.dnn.NMSBoxes(boxes_xywh, scores.tolist(), NMS_SCORE, NMS_THRESH)
     if len(indices) == 0:
         return sv.Detections.empty()
 
@@ -152,7 +129,7 @@ def postprocess(output, input_shape, original_shape):
     return sv.Detections(
         xyxy=np.array(boxes_xyxy)[indices],
         confidence=scores[indices],
-        class_id=class_ids[indices]
+        class_id=np.zeros(len(indices), dtype=np.int64)  # all person
     )
 
 def main():
@@ -364,7 +341,7 @@ def main():
                                     continue
                                     
                                 info["last_face_seen"] = now
-                                
+
                                 matched_name = db.get_best_match(face.embedding)
                                 
                                 timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
