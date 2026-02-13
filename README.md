@@ -56,6 +56,19 @@ docker-compose -f docker-compose.cpu.yml up --build -d
 -   **Location Dashboard**: [http://localhost](http://localhost)
 -   **Identity Management**: [http://localhost:5001](http://localhost:5001)
 
+## MCP Server (LLM Integration)
+
+The system exposes a Model Context Protocol (MCP) server for LLMs to query the CCTV system.
+
+- **Endpoint**: `http://localhost:8000/mcp`
+- **Output Format**: All tools return a JSON object with `content` (human-readable summary) and `structuredContent` (machine-readable data).
+- **Key Tools**:
+    - `query_sightings`: General purpose query (supports filters).
+    - `first_seen` / `last_seen`: Find arrival/departure times.
+    - `people_in_location_now`: List people currently in a specific area.
+    - `where_has_been`: Track a person's movement history.
+    - `list_locations`: List available logical locations (groups of cameras).
+
 ## Development (Local)
 
 To run without Docker (requires Python 3.10+, PostgreSQL running locally):

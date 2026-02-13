@@ -302,11 +302,12 @@ class IdentityDB:
             """)
             return cursor.fetchall()
 
-    def query_sightings(self, name=None, camera=None, date_str=None, limit=200, order="DESC"):
+    def query_sightings(self, name=None, camera=None, date_str=None, limit=200, order="DESC", min_timestamp=None, max_timestamp=None):
         """
         Flexible sighting query.
         date_str: "today", "yesterday", "YYYY-MM-DD"
         order: "ASC" (First) or "DESC" (Last/Recent)
+        min_timestamp, max_timestamp: datetime objects for granular filtering
         """
         query = """
             SELECT s.id, s.image_path, s.timestamp, s.camera, i.name, s.bbox
@@ -348,8 +349,6 @@ class IdentityDB:
                     start_dt = datetime.datetime.combine(target_date, datetime.time.min)
                     end_dt = datetime.datetime.combine(target_date, datetime.time.max)
                 except ValueError:
-                    # Invalid date format, ignore or error?
-                    # Let's ignore filter if invalid
                     start_dt = None
                     end_dt = None
             
@@ -357,8 +356,16 @@ class IdentityDB:
                 query += " AND s.timestamp >= %s AND s.timestamp <= %s"
                 params.append(start_dt)
                 params.append(end_dt)
-                
-        # Ordering
+
+        if min_timestamp:
+            query += " AND s.timestamp >= %s"
+            params.append(min_timestamp)
+        
+        if max_timestamp:
+            query += " AND s.timestamp <= %s"
+            params.append(max_timestamp)
+            
+        # ordering
         if order.upper() == "ASC":
             query += " ORDER BY s.timestamp ASC"
         else:
