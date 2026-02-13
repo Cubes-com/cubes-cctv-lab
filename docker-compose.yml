@@ -102,6 +102,28 @@ services:
       - DB_PASS=password
       - MCP_HOST=*
 
+  face-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    container_name: cctv-face-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: [ "uvicorn", "src.face_service:app", "--host", "0.0.0.0", "--port", "8001" ]
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+      - ./cameras.yml:/app/cameras.yml:ro
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=cctv
+      - DB_USER=user
+      - DB_PASS=password
+      - OMP_NUM_THREADS=1
+
   web:
     build:
       context: .

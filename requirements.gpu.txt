@@ -11,4 +11,4 @@ insightface
 mediapipe
 requests
 mcp
-onnxruntime-gpu
+onnxruntime

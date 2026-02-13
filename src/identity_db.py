@@ -206,12 +206,16 @@ class IdentityDB:
         return known_faces
 
     def get_best_match(self, target_embedding, threshold=None):
+        name, score = self.get_best_match_with_score(target_embedding, threshold)
+        return name
+
+    def get_best_match_with_score(self, target_embedding, threshold=None):
         if threshold is None:
             threshold = self.match_threshold
-        known_faces = self.get_known_faces()
-        if not known_faces:
-            return None
-
+        
+        # Optimization: Check if any known faces exist first?
+        # The logic below handles it (rows will be empty)
+        
         norm = np.linalg.norm(target_embedding)
         if norm > 0:
             target_embedding = target_embedding / norm
@@ -225,6 +229,7 @@ class IdentityDB:
             rows = cursor.fetchall()
             
             # Assigned sightings (Only PERMANENT/CONFIRMED ones)
+            # Optimization: Cache this?
             cursor.execute("""
                 SELECT i.name, s.embedding 
                 FROM sightings s 
@@ -241,9 +246,9 @@ class IdentityDB:
                 best_name = name
         
         if best_score > threshold:
-            return best_name
+            return best_name, best_score
         
-        return None
+        return None, best_score
 
     def add_sighting(self, image_path, embedding, identity_id=None, is_permanent=False, camera=None, bbox=None):
         embedding_bytes = embedding.astype(np.float32).tobytes()
@@ -267,6 +272,25 @@ class IdentityDB:
         with self.conn.cursor() as cursor:
             cursor.execute("UPDATE sightings SET end_timestamp = CURRENT_TIMESTAMP WHERE id = %s", (sighting_id,))
         self.conn.commit()
+
+    def get_active_sighting(self, camera, identity_id, threshold_seconds=10):
+        """
+        Finds a recent sighting for the given identity on the given camera.
+        Used to merge consecutive detections into a single sighting.
+        """
+        with self.conn.cursor() as cursor:
+            # Check for a sighting where end_timestamp is within the last X seconds
+            cursor.execute("""
+                SELECT id 
+                FROM sightings 
+                WHERE camera = %s 
+                  AND identity_id = %s 
+                  AND end_timestamp > (CURRENT_TIMESTAMP - INTERVAL '%s seconds')
+                ORDER BY end_timestamp DESC 
+                LIMIT 1
+            """, (camera, identity_id, threshold_seconds))
+            res = cursor.fetchone()
+        return res[0] if res else None
 
     def add_sighting_for_identity(self, identity_id, image_path, embedding, camera=None, bbox=None):
         # Manually added, so is_permanent=True
