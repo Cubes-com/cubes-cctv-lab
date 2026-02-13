@@ -51,12 +51,13 @@ async def startup_event():
     print("Service Ready.")
 
 # --- Helpers ---
-def process_sighting(embedding, camera_name, record=True):
+def process_sighting(embedding, camera_name, record=True, face_img=None, full_img=None, face_bbox=None):
     """
     Common logic for handling a face embedding:
     1. Identify person.
     2. Check for active sighting.
     3. Merge or Create (if record=True).
+    4. Save Image (if record=True and image provided).
     """
     # 1. Identify
     # get_best_match returns (name, similarity)
@@ -85,11 +86,47 @@ def process_sighting(embedding, camera_name, record=True):
                 
         # If not merged, create new
         if not sighting_id:
+            # 4. Save Image
+            image_path = "api_vector_upload" # Default if no image
+            bbox_json = None
+            
+            if face_img is not None:
+                # Generate unique filename
+                timestamp = int(datetime.datetime.now().timestamp() * 1000)
+                filename = f"{timestamp}_{camera_name}_api.jpg"
+                save_dir = "data/sightings"
+                
+                # Ensure dir exists (it is mounted, but safety first)
+                os.makedirs(save_dir, exist_ok=True)
+                
+                filepath = os.path.join(save_dir, filename)
+                
+                # Save just the face crop for now (consistent with analyse_rtsp logic for knowns)
+                # Or should we save full image if available? 
+                # analyse_rtsp saves person_crop. 
+                # Here face_img IS the crop if detected via face analysis? NO, face_img is likely the cropped alignment or we need to crop it.
+                # Actually, in _handle_image we have `img` (full) and `face` object.
+                # Let's pass the crop as `face_img`.
+                
+                cv2.imwrite(filepath, face_img)
+                image_path = filepath
+                
+                # Bbox
+                if face_bbox is not None and full_img is not None:
+                    h, w, _ = full_img.shape
+                    # normalize
+                    b = face_bbox
+                    bbox_json = [
+                        float(round(b[0]/w, 4)), float(round(b[1]/h, 4)),
+                        float(round(b[2]/w, 4)), float(round(b[3]/h, 4))
+                    ]
+
             sighting_id = db.add_sighting(
-                image_path="api_vector_upload", 
+                image_path=image_path, 
                 embedding=embedding, 
                 identity_id=identity_id, 
-                camera=camera_name
+                camera=camera_name,
+                bbox=bbox_json
             )
             if name != "Unknown":
                 db.update_last_seen(name, camera_name)
@@ -161,7 +198,17 @@ async def _handle_image(camera: str, file: UploadFile, record: bool):
     faces.sort(key=lambda x: (x.bbox[2]-x.bbox[0]) * (x.bbox[3]-x.bbox[1]), reverse=True)
     face = faces[0]
     
-    return process_sighting(face.embedding, camera, record=record)
+    # Crop Face for saving
+    # InsightFace bbox is [x1, y1, x2, y2]
+    b = list(map(int, face.bbox))
+    # Clip to bounds
+    h, w, _ = img.shape
+    b[0] = max(0, b[0]); b[1] = max(0, b[1])
+    b[2] = min(w, b[2]); b[3] = min(h, b[3])
+    
+    face_crop = img[b[1]:b[3], b[0]:b[2]]
+    
+    return process_sighting(face.embedding, camera, record=record, face_img=face_crop, full_img=img, face_bbox=face.bbox)
 
 def _handle_vector(request: RecognizeRequest, record: bool):
     embedding_np = np.array(request.embedding, dtype=np.float32)
