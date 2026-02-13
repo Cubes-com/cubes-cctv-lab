@@ -50,7 +50,7 @@ def list_cameras() -> str:
 
 @mcp.tool()
 def query_sightings(
-    query: str,
+    query: str = None,
     name: str = None, 
     camera: str = None, 
     date_str: str = None, 
